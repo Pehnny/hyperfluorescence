@@ -1,9 +1,11 @@
 #########################################################################################################
 #
 #   author(s) : Théo Piron
-#   last update : 11/05/2022 (dd/mm/yyyy)
+#   last update : 01/02/2023 (dd/mm/yyyy)
 #   python version : 3.10.4
-#   modules : reaseau, molecule, event, energy
+#   numpy version : 1.21.4
+#   matplotlib version : 3.5.0
+#   modules : reseau, molecule, event, energy
 #
 #   Bugs connus :   - Fonction d'affichage pas efficace pour les grand réseaux
 #
@@ -12,7 +14,7 @@
 #########################################################################################################
 
 # import matplotlib
-from numpy import arange
+import numpy as np
 # from TADF import tadf
 # from emetteur import fluorescent
 # from hote import host
@@ -64,7 +66,7 @@ class lattice :
     # Arguments :   - dim : point contenant les dimensions du réseau
     #               - prop : tuple de taille 2 contenant les proportions (%) de matériaux tadf et fluo
     @elapsedTime("Init :")
-    def __init__(self, dimension : point, proportions : tuple, Ez : float = 10**8, hashtag : int | None = None, sigma : float = 0.1) :
+    def __init__(self, dimension : tuple, proportions : tuple, Ez : float = 10**8, hashtag : int | None = None, sigma : float = 0.1) :
         # ID
         self.HASHTAG = hashtag
         # Vocabulaire du réseau
@@ -81,14 +83,14 @@ class lattice :
         self.sigma = sigma  # Désordre énergétique (eV)
         self.coulomb = 4.806*10**(-10) # Constante de Coulomb * charge élémentaire (Nm^2/C)
         # Réseau
-        self.grid : list[list[list[host | tadf | fluorescent]]] = [[[self.__Type(point(i,j,k)) for k in range(self.dimension.z)] for j in range(self.dimension.y)] for i in range(self.dimension.x)] # réseau
+        self.grid = self.__Construction()
         # Evenements
         self.events_LUMO : list[event] = []   # stocke les événements liés à la LUMO (transfert de charge)
         self.events_HOMO: list[event] = []    # stocke les événements liés à la HOMO (transfert de charge)
         self.events_Exciton: list[event] = []  # stocke les événements d'émissions
         # Charges
-        self.electrons, self.trous = 10, 10  # Nombre de charges
-        self.electronPositions = self.__Injection(self.dimension.z-1)
+        self.charges = 10  # Nombre de charges de chaque signe (!= charges totales)
+        self.electronPositions = self.__Injection(self.dimension[2]-1)
         self.trouPositions = self.__Injection(0)
         for electron, trou in zip(self.electronPositions, self.trouPositions):
             self.grid[electron.x][electron.y][electron.z].Electron()
@@ -115,18 +117,32 @@ class lattice :
     #   Fonctions de démarrage du réseau
     #
     #################################################
-
-    # Choisi le type de molécule de chaque noeud du réseau
-    # Arguments :   - pos : position de la molécule dans le réseau
-    def __Type(self, pos : point) -> host | tadf | fluorescent :
-        prop_tadf, prop_fluo = self.proportion
-        random = self.rng.uniform(0, 100)
-        if random < 100 - prop_tadf - prop_fluo :
-            return host(pos, self.__CalculVoisins(pos), sigma = self.sigma)
-        elif random < 100 - prop_fluo :
-            return tadf(pos, self.__CalculVoisins(pos), sigma = self.sigma)
+    def __Construction(self) -> list[list[list[host | tadf | fluorescent]]] :
+        taille = self.dimension[0]*self.dimension[1]*self.dimension[2]
+        propTADF, propFluo = self.proportion
+        propTADF, propFluo = floor(taille * propTADF / 100), floor(taille * propFluo / 100)
+        valeur = np.zeros(taille, int)
+        for i in range(propTADF):
+            valeur[i] = 1
+        for i in range(propTADF, propTADF+propFluo):
+            valeur[i] = 2
+        self.rng.shuffle(valeur)
+        valeur = valeur.reshape((self.dimension[0], self.dimension[1], self.dimension[2]))
+        valeur = valeur.tolist()
+        for x in range(self.dimension[0]):
+            for y in range(self.dimension[1]):
+                for z in range(self.dimension[2]):
+                    pos = point(x,y,z)
+                    valeur[x][y][z] = self.__MoleculeType(valeur[x][y][z], pos)
+        return valeur
+    
+    def __MoleculeType(self, n : int, pos : point) :
+        if n == 0 :
+            return host(pos, self.__CalculVoisins(pos), sigma=self.sigma)
+        elif n == 1 :
+            return tadf(pos, self.__CalculVoisins(pos), sigma=self.sigma)
         else :
-            return fluorescent(pos, self.__CalculVoisins(pos), sigma = self.sigma)
+            return fluorescent(pos, self.__CalculVoisins(pos), sigma=self.sigma)
 
     # Détermine les voisins d'une molécule sur base d'un rayon d'action
     # Arguments :   - pos : position de la molécule dans le réseau
@@ -143,12 +159,12 @@ class lattice :
     def __BVKX(self, pos : int, distance : int) -> list[int] :
         borneInf = pos - distance
         borneSup = pos + distance
-        if borneInf > -1 and borneSup < self.dimension.x :
+        if borneInf > -1 and borneSup < self.dimension[0] :
             return list(range(pos-distance, pos+distance+1))
         elif borneInf < 0 :
-            return list(range(0, distance+1)) + list(range(self.dimension.x-distance, self.dimension.x))
+            return list(range(0, distance+1)) + list(range(self.dimension[0]-distance, self.dimension[0]))
         else :
-            return list(range(pos-distance, self.dimension.x)) + list(range(distance))
+            return list(range(pos-distance, self.dimension[0])) + list(range(distance))
 
     # Détermine les indices y des voisins en tenant compte des conditions limites de Born von Kerman
     # Arguments :   - pos : indice y à la positions évaluée
@@ -156,12 +172,12 @@ class lattice :
     def __BVKY(self, pos : int, distance : int) -> list[int] :
         borneInf = pos - distance
         borneSup = pos + distance
-        if borneInf > -1 and borneSup < self.dimension.y :
+        if borneInf > -1 and borneSup < self.dimension[1] :
             return list(range(pos-distance, pos+distance+1))
         elif borneInf < 0 :
-            return list(range(0, distance+1)) + list(range(self.dimension.y-distance, self.dimension.y))
+            return list(range(0, distance+1)) + list(range(self.dimension[1]-distance, self.dimension[1]))
         else :
-            return list(range(pos-distance, self.dimension.y)) + list(range(distance))
+            return list(range(pos-distance, self.dimension[1])) + list(range(distance))
 
     # Détermine les indices z des voisins en tenant compte de la présence des électrodes.
     # Arguments :   - pos : indice z à la positions évaluée
@@ -169,18 +185,18 @@ class lattice :
     def __BVKZ(self, pos : int, distance : int | float) -> list[int] :
         borneInf = pos - distance
         borneSup = pos + distance
-        if borneInf > -1 and borneSup < self.dimension.z :
+        if borneInf > -1 and borneSup < self.dimension[2] :
             return list(range(pos-distance, pos+distance+1))
         elif borneInf < 0 :
             return list(range(0, distance+1))
         else :
-            return list(range(pos-distance, self.dimension.z))
+            return list(range(pos-distance, self.dimension[2]))
     
     # Injecte les charges aux interfaces du réseau (z). Enregistre leurs positions et crée les premiers événements.
     @elapsedTime("Injection :")
     def __Injection(self, z : int) -> list[point] :
-        posX = self.rng.choice(self.dimension.x, size = self.electrons, replace=False, shuffle=False)
-        posY = self.rng.choice(self.dimension.y, size = self.electrons, replace=False, shuffle=False)
+        posX = self.rng.choice(self.dimension[0], size = self.charges, replace=False, shuffle=False)
+        posY = self.rng.choice(self.dimension[1], size = self.charges, replace=False, shuffle=False)
         return [point(x, y, z) for x,y in zip(posX, posY)]
 
     ########################################################
@@ -603,13 +619,10 @@ class lattice :
     #   Visualisation
     #
     ########################################################
-
     # Fonction d'affichage du réseau
+    @elapsedTime("Plot :")
     def Plot(self, nom : str = "Inconnu") :
         use("Agg")
-        if self.dimension.x*self.dimension.y*self.dimension.z > 50000 :
-            print ("Plot : trop de molécules pour une représentation visuelle efficace")
-            return
         plt.figure(dpi=100)
         axes = plt.axes(projection = "3d")
         # Création des points pour les molécules chargées
@@ -650,25 +663,25 @@ class lattice :
             y.clear()
             z.clear()
         # Contour du réseau
-        xgrid = [0, self.dimension.x-1]
-        ygrid = [0, self.dimension.y-1]
-        zgrid = [0, self.dimension.z-1]
+        xgrid = [0, self.dimension[0]-1]
+        ygrid = [0, self.dimension[1]-1]
+        zgrid = [0, self.dimension[2]-1]
         for i in xgrid :
             for j in ygrid :
-                axes.plot([i,i], [j,j], [0, self.dimension.z-1], color = "k", linewidth = 1)
+                axes.plot([i,i], [j,j], [0, self.dimension[2]-1], color = "k", linewidth = 1)
             for k in zgrid :
-                axes.plot([i,i], [0, self.dimension.y-1], [k,k], color = "k", linewidth = 1)
+                axes.plot([i,i], [0, self.dimension[1]-1], [k,k], color = "k", linewidth = 1)
         for j in ygrid :
             for k in zgrid :
-                axes.plot([0, self.dimension.x-1], [j,j], [k,k], color = "k", linewidth = 1)
+                axes.plot([0, self.dimension[0]-1], [j,j], [k,k], color = "k", linewidth = 1)
         # Options du graphique
         plt.legend(legende)
         axes.set_xlabel("x", size = 16)
         axes.set_ylabel("y", size = 16)
         axes.set_zlabel("z", size = 16)
-        axes.set_xlim([0, self.dimension.x - 1])
-        axes.set_ylim([0, self.dimension.y - 1])
-        axes.set_zlim([0, self.dimension.z - 1])
+        axes.set_xlim([0, self.dimension[0] - 1])
+        axes.set_ylim([0, self.dimension[1] - 1])
+        axes.set_zlim([0, self.dimension[2] - 1])
         # Affichage
         plt.tight_layout()
         plt.savefig(nom, bbox_inches = "tight")
@@ -680,6 +693,17 @@ class lattice :
     #   Fonctions obsolètes
     #
     ########################################################
+    # Choisi le type de molécule de chaque noeud du réseau
+    # Arguments :   - pos : position de la molécule dans le réseau
+    def __TypeOld(self, pos : point) -> host | tadf | fluorescent :
+        prop_tadf, prop_fluo = self.proportion
+        random = self.rng.uniform(0, 100)
+        if random < 100 - prop_tadf - prop_fluo :
+            return host(pos, self.__CalculVoisins(pos), sigma = self.sigma)
+        elif random < 100 - prop_fluo :
+            return tadf(pos, self.__CalculVoisins(pos), sigma = self.sigma)
+        else :
+            return fluorescent(pos, self.__CalculVoisins(pos), sigma = self.sigma)
 
     # Détermine les voisins d'une molécule
     # Arguments :   - pos : position de la molécule dans le réseau
@@ -737,6 +761,6 @@ class lattice :
     def _up(self, pos : point) -> point :
         return point(pos.x, pos.y, pos.z+1)
 
-test = lattice(point(50,50,20), (15,1))
-test.Plot()
+test = lattice((50,50,50), (15,1))
+test.Plot("test")
 # test.Operations(100)
