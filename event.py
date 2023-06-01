@@ -10,8 +10,6 @@
 
 from math import sqrt
 
-# Classe de type point qui permet de stocker des triplets de nombres correspondant aux coordonnées cartésiennes à 3 dimensions. 
-# Utilisée dans le réseau et les molécules.
 class point :
     def __init__(self, x : int, y : int, z : int) :
         self.x = x
@@ -21,15 +19,12 @@ class point :
     def __repr__(self) -> str:
         return str((self.x, self.y, self.z))
 
-    def __str__(self) -> str:
-        return self.__repr__()
-
     def __eq__(self, other):
         if not isinstance(other, point):
-            return NotImplemented
+            raise TypeError(f"other argument must be {self.__class__.__name__}")
         else :
-            cond = self.x == other.x and self.y == other.y and self.z == other.z
-            return cond
+            condition = self.x == other.x and self.y == other.y and self.z == other.z
+            return condition
     
     def __mul__(self, other) :
         if isinstance(other, point):
