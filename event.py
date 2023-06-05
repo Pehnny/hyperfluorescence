@@ -7,9 +7,6 @@
 #
 #
 #########################################################################################################
-
-from math import sqrt
-
 class point :
     def __init__(self, x : int, y : int, z : int) :
         self.x = x
@@ -20,55 +17,37 @@ class point :
         return str((self.x, self.y, self.z))
 
     def __eq__(self, other):
-        if not isinstance(other, point):
-            raise TypeError(f"other argument must be {self.__class__.__name__}")
-        else :
-            condition = self.x == other.x and self.y == other.y and self.z == other.z
-            return condition
-    
-    def __mul__(self, other) :
         if isinstance(other, point):
-            return self.x * other.x + self.y * other.y + self.z * other.z
-        elif isinstance(other, (float, int)):
-            return point(other * self.x, other * self.y, other * self.z)
+            return self.x == other.x and self.y == other.y and self.z == other.z
         else :
-            return NotImplemented
-    
-    def __rmul__(self, other) :
-        return self*other
+            raise TypeError(f"other must be of type point, got {type(other)}")
             
     def __sub__(self, other) :
-        if not isinstance(other, point):
-            return NotImplemented
-        else :
+        if isinstance(other, point):
             return point(self.x - other.x, self.y - other.y, self.z - other.z)
+        else :
+            raise TypeError(f"other must be of type point, got {type(other)}")
     
     def __add__(self, other) :
-        if not isinstance(other, point):
-            return NotImplemented
-        else :
+        if isinstance(other, point):
             return point(self.x + other.x, self.y + other.y, self.z + other.z)
-
-    def __pow__(self, other) :
-        if isinstance(other, int) and other == 2 :
-            return sqrt(self.x ** other + self.y ** other + self.z ** other)
         else :
-            return NotImplemented
+            raise TypeError(f"other must be of type point, got {type(other)}")
+        
+
 # Classe de type event qui permet au réseau d'identifier le type d'événement microscopique, le temps de réaction et les cases concernées.
 class event :
-    def __init__(self, initial : point, final : point, tau : float, reaction : str) :
+    def __init__(self, initial : point, final : point, tau : float) :
         self.initial = initial
         self.final = final
         self.tau = tau
-        self.REACTION = reaction
 
     def __eq__(self, other):
-        if not isinstance(other, event):
-            return NotImplemented
+        if isinstance(other, event):
+            return self.initial == other.initial and self.final == other.final
         else :
-            equal = self.initial == other.initial and self.final == other.final and self.REACTION == other.REACTION
-            return equal
-
+            raise TypeError(f"other must be of type event, got {type(other)}")
+            
     def __lt__(self, other) :
         if isinstance(other, event) :
             return self.tau < other.tau
@@ -94,5 +73,4 @@ class event :
             return NotImplemented
 
     def __repr__(self) -> str:
-        string = (str(self.initial), str(self.final), str(self.tau), self.REACTION)
-        return (str(string))
+        return str(", ").join([str(self.initial), str(self.final), str(self.tau), self.REACTION])
