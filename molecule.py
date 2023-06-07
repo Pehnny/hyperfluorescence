@@ -21,52 +21,52 @@ class Exciton :
         
     Methods
     -------
-    spin_state(random_number : int) -> bool
+    spin_state(number : int) -> bool
         Retourne l'état du spin de l'exciton lors de sa création.
     revert_spin() -> None
         Renverse la valeur de l'attribut spin.
     """
 
-    def __init__(self, random_number : int) -> None :
+    def __init__(self, number : int) -> None :
         """Initialise l'instance de Exciton.
 
         Parameters
         ----------
-        random_number : int
+        number : int
             Nombre aléatoire qui permet de déterminer l'état de spin de l'exciton.
         """
-        self.spin : bool = self.spin_state(random_number)
+        self.spin : bool = self.spin_state(number)
 
     def __repr__(self) -> str:
         """Retourne l'état de spin de l'Exciton sous forme de texte.
         """
         return "singlet state exciton" if self.spin else "triplet state exciton"
 
-    def spin_state(self, random_number : int) -> bool :
+    def spin_state(self, number : int) -> bool :
         """Génère l'état de spin de l'Exciton selon l'entrée.
 
         Parameters
         ----------
-        random_number : int
+        number : int
             Nombre aléatoire qui permet de déterminer l'état de spin de l'exciton.
 
         Returns
         -------
         bool
-            True si random_number est dans l'intervalle semi-ouvert [0,25). \n
-            False si random_number est dans l'intervalle semi-ouvert [25,100).
+            True si number est dans l'intervalle semi-ouvert [0,25). \n
+            False si number est dans l'intervalle semi-ouvert [25,100).
 
         Raises
         ------
         ValueError
-            Erreur levée quand le paramètre random_number est hors de l'intervalle
+            Erreur levée quand le paramètre number est hors de l'intervalle
             semi-ouvert [0,100).
         """
-        if 0 <= random_number < 25 :
+        if 0 <= number < 25 :
             return True
-        elif 25 <= random_number < 100 :
+        elif 25 <= number < 100 :
             return False
-        raise ValueError(f"random_number = {random_number} but cannot exceed nor equal 100")
+        raise ValueError(f"number = {number} but cannot exceed nor equal 100")
     
     def revert_spin(self) -> None :
         """Renverse l'état de spin de l'Exciton.
@@ -404,6 +404,7 @@ class Host(Molecule) :
         Décompose l'exciton. Remet les attributs electron et hole en False et supprime l'attribut
         exciton. Retourne True si l'exciton est singulet (émetteur fluorescent), False sinon.
     """
+
     def __init__(self, position : point,
                  voisins : list[point], homo_energy : float = -6.0,
                  lumo_energy : float = -2.0, s1_energy : float = 3.50,
@@ -458,3 +459,4 @@ class Host(Molecule) :
             return False
         else :
             raise AttributeError(f"Attribute exciton doesn't exist.")
+        

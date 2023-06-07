@@ -7,18 +7,30 @@
 #
 #
 #########################################################################################################
+from dataclasses import dataclass
+
+@dataclass
 class point :
-    def __init__(self, x : int, y : int, z : int) :
-        self.x = x
-        self.y = y
-        self.z = z
+    """Classe représentant un point dans une grille à 3 dimensions.
 
-    def __repr__(self) -> str:
-        return str((self.x, self.y, self.z))
+    points can add and sub.
 
-    def __eq__(self, other):
+    Attributes
+    ----------
+    x : int
+        position selon l'axe x.
+    y : int
+        position selon l'axe y.
+    z : int
+        position selon l'axe z.
+    """
+    x : int
+    y : int
+    z : int
+
+    def __add__(self, other) :
         if isinstance(other, point):
-            return self.x == other.x and self.y == other.y and self.z == other.z
+            return point(self.x + other.x, self.y + other.y, self.z + other.z)
         else :
             raise TypeError(f"other must be of type point, got {type(other)}")
             
@@ -27,15 +39,8 @@ class point :
             return point(self.x - other.x, self.y - other.y, self.z - other.z)
         else :
             raise TypeError(f"other must be of type point, got {type(other)}")
-    
-    def __add__(self, other) :
-        if isinstance(other, point):
-            return point(self.x + other.x, self.y + other.y, self.z + other.z)
-        else :
-            raise TypeError(f"other must be of type point, got {type(other)}")
         
 
-# Classe de type event qui permet au réseau d'identifier le type d'événement microscopique, le temps de réaction et les cases concernées.
 class event :
     def __init__(self, initial : point, final : point, tau : float) :
         self.initial = initial
@@ -74,3 +79,11 @@ class event :
 
     def __repr__(self) -> str:
         return str(", ").join([str(self.initial), str(self.final), str(self.tau), self.REACTION])
+    
+a = point(2,2,2)
+b = point(1,0,-1)
+print(type(a))
+print(type(a.x))
+c = a + b
+print(type(c))
+print(type(c.x))
