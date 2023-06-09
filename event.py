@@ -10,80 +10,129 @@
 from dataclasses import dataclass
 
 @dataclass
-class point :
-    """Classe représentant un point dans une grille à 3 dimensions.
+class Point :
+    """Dataclasse représentant un point dans une grille à 3 dimensions.
 
-    points can add and sub.
+    Les points peuvent s'additionner et se soustraire
 
     Attributes
     ----------
     x : int
-        position selon l'axe x.
+        Position selon l'axe x.
     y : int
-        position selon l'axe y.
+        Position selon l'axe y.
     z : int
-        position selon l'axe z.
+        Position selon l'axe z.
     """
     x : int
     y : int
     z : int
 
     def __add__(self, other) :
-        if isinstance(other, point):
-            return point(self.x + other.x, self.y + other.y, self.z + other.z)
-        else :
-            raise TypeError(f"other must be of type point, got {type(other)}")
+        if isinstance(other, Point):
+            return Point(self.x + other.x, self.y + other.y, self.z + other.z)
+        raise TypeError(f"other must be of type point, got {type(other)}")
             
     def __sub__(self, other) :
-        if isinstance(other, point):
-            return point(self.x - other.x, self.y - other.y, self.z - other.z)
-        else :
-            raise TypeError(f"other must be of type point, got {type(other)}")
-        
+        if isinstance(other, Point):
+            return Point(self.x - other.x, self.y - other.y, self.z - other.z)
+        raise TypeError(f"other must be of type point, got {type(other)}")
 
-class event :
-    def __init__(self, initial : point, final : point, tau : float) :
-        self.initial = initial
-        self.final = final
-        self.tau = tau
 
-    def __eq__(self, other):
-        if isinstance(other, event):
-            return self.initial == other.initial and self.final == other.final
-        else :
-            raise TypeError(f"other must be of type event, got {type(other)}")
+@dataclass
+class Event :
+    """Dataclasse représentant un événement au sein du réseau.
+
+    Opération de comparaison implémentée
+
+    Attributes
+    ----------
+    initial : Point
+        Position de départ de l'événement.
+    final : Point
+        Position d'arrivée de l'événement.
+    tau : float
+        Durée de l'événement.
+    """
+    initial : Point
+    final : Point
+    tau : float
             
     def __lt__(self, other) :
-        if isinstance(other, event) :
+        if isinstance(other, Event) :
             return self.tau < other.tau
-        else :
-            return NotImplemented
+        raise TypeError(f"other must be of type event, got {type(other)}")
     
     def __gt__(self, other) :
-        if isinstance(other, event) :
+        if isinstance(other, Event) :
             return self.tau > other.tau
-        else :
-            return NotImplemented
+        raise TypeError(f"other must be of type event, got {type(other)}")
 
     def __le__(self, other) :
-        if isinstance(other, event) :
+        if isinstance(other, Event) :
             return self.tau <= other.tau
-        else :
-            return NotImplemented
+        raise TypeError(f"other must be of type event, got {type(other)}")
     
     def __ge__(self, other) :
-        if isinstance(other, event) :
+        if isinstance(other, Event) :
             return self.tau >= other.tau
-        else :
-            return NotImplemented
+        raise TypeError(f"other must be of type event, got {type(other)}")
 
-    def __repr__(self) -> str:
-        return str(", ").join([str(self.initial), str(self.final), str(self.tau), self.REACTION])
-    
-a = point(2,2,2)
-b = point(1,0,-1)
-print(type(a))
-print(type(a.x))
-c = a + b
-print(type(c))
-print(type(c.x))
+
+@dataclass
+class Move(Event) :
+    """Dataclasse représentant un événement de type déplacement au sein du réseau.
+
+    Opération de comparaison implémentée.
+
+    Attributes
+    ----------
+    initial : Point
+        Position de départ de l'événement.
+    final : Point
+        Position d'arrivée de l'événement.
+    tau : float
+        Durée de l'événement.
+    """
+
+    ...
+
+
+@dataclass
+class Isc(Event) :
+    """Dataclasse représentant un événement de type conversion intersystème au sein du réseau.
+
+    Opération de comparaison implémentée
+
+    Attributes
+    ----------
+    initial : Point
+        Position de départ de l'événement.
+    final : Point
+        Position d'arrivée de l'événement.
+    tau : float
+        Durée de l'événement.
+    """
+
+    ...
+
+
+@dataclass
+class Decay(Event) :
+    """Dataclasse représentant un événement de type décroissance au sein du réseau.
+
+    Opération de comparaison implémentée
+
+    Attributes
+    ----------
+    initial : Point
+        Position de départ de l'événement.
+    final : Point
+        Position d'arrivée de l'événement.
+    tau : float
+        Durée de l'événement.
+    """
+
+    ...
+
+

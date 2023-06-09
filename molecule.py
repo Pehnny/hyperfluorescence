@@ -7,8 +7,8 @@
 #
 #
 #########################################################################################################
-from numpy.random import default_rng, Generator
 from event import point
+from random import Random
 
 
 class Exciton :
@@ -16,18 +16,18 @@ class Exciton :
 
     Attributes
     ----------
-    spin : bool
+    _spin : bool
         Etat de spin de l'exciton. True pour singulet et False pour triplet.
         
     Methods
     -------
     spin_state(number : int) -> bool
         Retourne l'état du spin de l'exciton lors de sa création.
-    revert_spin() -> None
+    reverse_spin() -> None
         Renverse la valeur de l'attribut spin.
     """
 
-    def __init__(self, number : int) -> None :
+    def __init__(self, number : float) -> None :
         """Initialise l'instance de Exciton.
 
         Parameters
@@ -35,14 +35,24 @@ class Exciton :
         number : int
             Nombre aléatoire qui permet de déterminer l'état de spin de l'exciton.
         """
-        self.spin : bool = self.spin_state(number)
+        self._spin : bool = self._spin_state(number)
 
     def __repr__(self) -> str:
         """Retourne l'état de spin de l'Exciton sous forme de texte.
         """
         return "singlet state exciton" if self.spin else "triplet state exciton"
 
-    def spin_state(self, number : int) -> bool :
+    @property
+    def spin(self) :
+        """Propriété spin.
+        """
+        return self._spin
+    
+    @spin.setter
+    def spin(self, state : bool) :
+        self._spin = state
+
+    def _spin_state(self, number : float) -> bool :
         """Génère l'état de spin de l'Exciton selon l'entrée.
 
         Parameters
@@ -53,22 +63,22 @@ class Exciton :
         Returns
         -------
         bool
-            True si number est dans l'intervalle semi-ouvert [0,25). \n
-            False si number est dans l'intervalle semi-ouvert [25,100).
+            True si number est dans l'intervalle semi-ouvert [0,0.25). \n
+            False si number est dans l'intervalle semi-ouvert [0.25,1).
 
         Raises
         ------
         ValueError
             Erreur levée quand le paramètre number est hors de l'intervalle
-            semi-ouvert [0,100).
+            semi-ouvert [0,1).
         """
-        if 0 <= number < 25 :
+        if 0 <= number < 0.25 :
             return True
-        elif 25 <= number < 100 :
+        elif 0.25 <= number < 1 :
             return False
-        raise ValueError(f"number = {number} but cannot exceed nor equal 100")
+        raise ValueError(f"number = {number} but number must be inside the semi-open interval [0,1)")
     
-    def revert_spin(self) -> None :
+    def reverse_spin(self) -> None :
         """Renverse l'état de spin de l'Exciton.
         """
         self.spin = not self.spin
@@ -103,8 +113,7 @@ class Molecule :
         NotImplemented.
     """
 
-    def __init__(self,
-                 position : point,
+    def __init__(self, position : point,
                  voisins : list[point]) :
         """Initialise l'instance de Molecule.
 
@@ -119,7 +128,7 @@ class Molecule :
         self.neighbors : list[point] = voisins
         self.electron : bool = False
         self.hole : bool = False
-        self.seed : Generator = default_rng()
+        self.seed : Random = Random()
     
     def switch_electron(self) -> None :
         """Renverse l'état de l'attribut electron.
@@ -135,7 +144,7 @@ class Molecule :
         """Génère l'attribut exciton si les attributs electron et hole sont True.
         """
         if self.electron and self.hole :
-            self.exciton = Exciton(self.seed.integers(0,100))
+            self.exciton = Exciton(self.seed.random())
 
     def exciton_decay(self) -> bool :
         """Détruit l'attribut exciton et remet les attributs electron et hole en False.
@@ -209,16 +218,11 @@ class Fluorescent(Molecule) :
         standard_deviation : float = 0.1
             Deviation standard des niveaux d'énergie.
         """
-        super().__init__(position,
-                         voisins)
-        self.homo_energy : float = self.seed.normal(homo_energy,
-                                                    standard_deviation)
-        self.lumo_energy : float = self.seed.normal(lumo_energy,
-                                                    standard_deviation)
-        self.s1_energy : float = self.seed.normal(s1_energy,
-                                                  standard_deviation)
-        self.t1_energy : float = self.seed.normal(t1_energy,
-                                                  standard_deviation)
+        super().__init__(position, voisins)
+        self.homo_energy : float = self.seed.gauss(homo_energy, standard_deviation)
+        self.lumo_energy : float = self.seed.gauss(lumo_energy, standard_deviation)
+        self.s1_energy : float = self.seed.gauss(s1_energy, standard_deviation)
+        self.t1_energy : float = self.seed.gauss(t1_energy, standard_deviation)
         
     def exciton_decay(self) -> bool:
         """Détruit l'attribut exciton et remet les attributs electron et hole en False.
@@ -238,18 +242,7 @@ class Fluorescent(Molecule) :
             self.hole = False
             del self.exciton
             return output
-        else :
-            raise AttributeError(f"Attribute exciton doesn't exist.")
-        # try :
-        #     output : bool = self.exciton.spin
-        #     del self.exciton
-        #     self.electron = False
-        #     self.hole = False
-        # except AttributeError :
-        #     print("Warning ! User tried to decay exciton but no exciton was found.")
-        #     output : bool = False
-        # finally :
-        #     return output
+        raise AttributeError(f"Attribute exciton doesn't exist.")
 
 
 class TADF(Molecule) :
@@ -321,10 +314,10 @@ class TADF(Molecule) :
             Deviation standard des niveaux d'énergie.
         """
         super().__init__(position, voisins)
-        self.homo_energy : float = self.seed.normal(homo_energy, standard_deviation)
-        self.lumo_energy : float = self.seed.normal(lumo_energy, standard_deviation)
-        self.s1_energy : float = self.seed.normal(s1_energy, standard_deviation)
-        self.t1_energy : float = self.seed.normal(t1_energy, standard_deviation)
+        self.homo_energy : float = self.seed.gauss(homo_energy, standard_deviation)
+        self.lumo_energy : float = self.seed.gauss(lumo_energy, standard_deviation)
+        self.s1_energy : float = self.seed.gauss(s1_energy, standard_deviation)
+        self.t1_energy : float = self.seed.gauss(t1_energy, standard_deviation)
 
     def exciton_decay(self) -> bool:
         """Détruit l'attribut exciton et remet les attributs electron et hole en False.
@@ -344,8 +337,7 @@ class TADF(Molecule) :
             self.hole = False
             del self.exciton
             return output
-        else :
-            raise AttributeError(f"Attribute exciton doesn't exist.")
+        raise AttributeError(f"Attribute exciton doesn't exist.")
         
     def intersystem_crossing(self) -> None :
         """Converti l'état de spin de l'exciton.
@@ -356,10 +348,9 @@ class TADF(Molecule) :
             Erreur levée quand la molécule n'a pas d'exciton moléculaire.
         """
         if hasattr(self, "exciton") :
-            self.exciton.revert_spin()
+            self.exciton.reverse_spin()
             return
-        else :
-            raise AttributeError("Attribute exciton doesn't exist.")
+        raise AttributeError("Attribute exciton doesn't exist.")
 
 
 class Host(Molecule) :
@@ -428,16 +419,11 @@ class Host(Molecule) :
         standard_deviation : float = 0.1
             Deviation standard des niveaux d'énergie.
         """
-        super().__init__(position,
-                         voisins)
-        self.homo_energy : float = self.seed.normal(homo_energy,
-                                                    standard_deviation)
-        self.lumo_energy : float = self.seed.normal(lumo_energy,
-                                                    standard_deviation)
-        self.s1_energy : float = self.seed.normal(s1_energy,
-                                                  standard_deviation)
-        self.t1_energy : float = self.seed.normal(t1_energy,
-                                                  standard_deviation)
+        super().__init__(position, voisins)
+        self.homo_energy : float = self.seed.gauss(homo_energy, standard_deviation)
+        self.lumo_energy : float = self.seed.gauss(lumo_energy, standard_deviation)
+        self.s1_energy : float = self.seed.gauss(s1_energy, standard_deviation)
+        self.t1_energy : float = self.seed.gauss(t1_energy, standard_deviation)
         
     def exciton_decay(self) -> bool:
         """Détruit l'attribut exciton et remet les attributs electron et hole en False.
@@ -457,6 +443,4 @@ class Host(Molecule) :
             self.hole = False
             del self.exciton
             return False
-        else :
-            raise AttributeError(f"Attribute exciton doesn't exist.")
-        
+        raise AttributeError(f"Attribute exciton doesn't exist.")
