@@ -79,6 +79,22 @@ class Event :
         raise TypeError(f"other must be of type event, got {type(other)}")
 
 
+class Particules :
+    """Classe contenant les types de particules pour les événements de type Move.
+
+    Attributes
+    ----------
+    electron : str = "electron"
+
+    hole : str = "hole"
+
+    exciton : str = "exciton"    
+    """
+
+    electron : str = "electron"
+    hole : str = "hole"
+    exciton : str = "exciton"
+
 @dataclass
 class Move(Event) :
     """Dataclasse représentant un événement de type déplacement au sein du réseau.
@@ -93,16 +109,31 @@ class Move(Event) :
         Position d'arrivée de l'événement.
     tau : float
         Durée de l'événement.
+    particule : str
+        Type de particule sujette au déplacement. Les types autorisés sont "electron", "hole" et "exciton". \n
+        Ces valeurs sont stockées comme attributs de classe dans la classe Particules.
     """
 
-    ...
+    particule : str
 
+
+class Spins :
+    """Classe contenant les sens de conversion intersystème pour les événements de type Isc.
+
+    Attributes
+    ----------
+    direct : str = "direct"
+    reverser : str = "reverse"
+    """
+
+    direct : str = "ISC"
+    reverse : str = "RISC"
 
 @dataclass
 class Isc(Event) :
     """Dataclasse représentant un événement de type conversion intersystème au sein du réseau.
 
-    Opération de comparaison implémentée
+    Opération de comparaison implémentée.
 
     Attributes
     ----------
@@ -112,16 +143,32 @@ class Isc(Event) :
         Position d'arrivée de l'événement.
     tau : float
         Durée de l'événement.
+    conversion : str
+        Sens de la conversion intersystème. Peut être "direct" (triplet-singlet) ou "reverse" (singlet-triplet). \n
+        Les sens de réaction sont stockée dans la classe Spins.
     """
 
-    ...
+    conversion : str
 
+
+class Radiation :
+    """Classe contenant les types de décroissances pour les événements de type Decay.
+
+    Attributes
+    ----------
+    non_radiative : str = "NR"
+
+    fluorescent : str = "Fluo"
+    """
+
+    non_radiative : str = "NR"
+    fluorescent : str = "Fluo"
 
 @dataclass
 class Decay(Event) :
     """Dataclasse représentant un événement de type décroissance au sein du réseau.
 
-    Opération de comparaison implémentée
+    Opération de comparaison implémentée.
 
     Attributes
     ----------
@@ -131,8 +178,10 @@ class Decay(Event) :
         Position d'arrivée de l'événement.
     tau : float
         Durée de l'événement.
+    radiative : str
+        Type de radiation. Les types de radiations sont "NR" (non radiation), sans émission, \n
+        et "Fluo" (fluorescence), avec émission fluorescente. Les valeurs possibles sont stockées \n
+        dans la classe Radiation.
     """
 
-    ...
-
-
+    radiative : str
