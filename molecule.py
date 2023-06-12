@@ -7,8 +7,9 @@
 #
 #
 #########################################################################################################
-from event import point
+from event import *
 from random import Random
+from dataclasses import dataclass
 
 
 class Exciton :
@@ -90,9 +91,9 @@ class Molecule :
 
     Attributes
     ----------
-    position : point
+    position : Point
         Position de la molécule dans le réseau.
-    neighbors : list[point]
+    neighbors : list[Point]
         Liste des positions des voisins proches de la molécule.
     electron : bool
         Présence d'un électron dans la molécule.
@@ -113,19 +114,19 @@ class Molecule :
         NotImplemented.
     """
 
-    def __init__(self, position : point,
-                 voisins : list[point]) :
+    def __init__(self, position : Point,
+                 voisins : list[Point]) :
         """Initialise l'instance de Molecule.
 
         Parameters
         ----------
-        position : point
+        position : Point
             Position de la molécule dans le réseau.
-        voisins : list[point]
+        voisins : list[Point]
             Liste des positions des voisins proches de la molécule.
         """
-        self.position : point = position
-        self.neighbors : list[point] = voisins
+        self.position : Point = position
+        self.neighbors : list[Point] = voisins
         self.electron : bool = False
         self.hole : bool = False
         self.seed : Random = Random()
@@ -159,9 +160,9 @@ class Fluorescent(Molecule) :
 
     Attributes
     ----------
-    position : point
+    position : Point
         Position de la molécule.
-    neighbors : list[point]
+    neighbors : list[Point]
         Liste des positions des voisins proches de la molécule.
     electron : bool
         Présence d'un électron dans la molécule.
@@ -195,17 +196,17 @@ class Fluorescent(Molecule) :
         exciton. Retourne True si l'exciton est singulet (émetteur fluorescent), False sinon.
     """
 
-    def __init__(self, position : point,
-                 voisins : list[point], homo_energy : float = -5.3,
+    def __init__(self, position : Point,
+                 voisins : list[Point], homo_energy : float = -5.3,
                  lumo_energy : float = -2.7, s1_energy : float = 2.69,
                  t1_energy : float = 1.43, standard_deviation : float = 0.1) -> None :
         """Initialise l'instance de la classe Fluorescent.
         
         Parameters
         ----------
-        position : point
+        position : Point
             Position de la molécule dans le réseau.
-        voisins : list[point]
+        voisins : list[Point]
             Liste des positions des voisins proches de la molécule.
         homo_energy : float = -5.3 (5.25)
             Energie moyenne de l'orbitale moléculaire occupée la plus haute.
@@ -252,9 +253,9 @@ class TADF(Molecule) :
 
     Attributes
     ----------
-    position : point
+    position : Point
         Position de la molécule.
-    neighbors : list[point]
+    neighbors : list[Point]
         Liste des positions des voisins proches de la molécule.
     electron : bool
         Présence d'un électron dans la molécule.
@@ -290,17 +291,17 @@ class TADF(Molecule) :
         Converti le spin de l'exciton.
     """
 
-    def __init__(self, position : point,
-                 voisins : list[point], homo_energy : float = -5.8,
+    def __init__(self, position : Point,
+                 voisins : list[Point], homo_energy : float = -5.8,
                  lumo_energy : float = -2.6, s1_energy : float = 2.55,
                  t1_energy : float = 2.52, standard_deviation : float = 0.1) -> None :
         """Initialise l'instance de la classe TADF.
         
         Parameters
         ----------
-        position : point
+        position : Point
             Position de la molécule dans le réseau.
-        voisins : list[point]
+        voisins : list[Point]
             Liste des positions des voisins proches de la molécule.
         homo_energy : float = -5.8
             Energie moyenne de l'orbitale moléculaire occupée la plus haute.
@@ -360,9 +361,9 @@ class Host(Molecule) :
 
     Attributes
     ----------
-    position : point
+    position : Point
         Position de la molécule.
-    neighbors : list[point]
+    neighbors : list[Point]
         Liste des positions des voisins proches de la molécule.
     electron : bool
         Présence d'un électron dans la molécule.
@@ -396,17 +397,17 @@ class Host(Molecule) :
         exciton. Retourne True si l'exciton est singulet (émetteur fluorescent), False sinon.
     """
 
-    def __init__(self, position : point,
-                 voisins : list[point], homo_energy : float = -6.0,
+    def __init__(self, position : Point,
+                 voisins : list[Point], homo_energy : float = -6.0,
                  lumo_energy : float = -2.0, s1_energy : float = 3.50,
                  t1_energy : float = 3.00, standard_deviation : float = 0.1) -> None :
         """Initialise l'instance de la classe TADF.
         
         Parameters
         ----------
-        position : point
+        position : Point
             Position de la molécule dans le réseau.
-        voisins : list[point]
+        voisins : list[Point]
             Liste des positions des voisins proches de la molécule.
         homo_energy : float = -6.0
             Energie moyenne de l'orbitale moléculaire occupée la plus haute.
@@ -444,3 +445,21 @@ class Host(Molecule) :
             del self.exciton
             return False
         raise AttributeError(f"Attribute exciton doesn't exist.")
+
+
+@dataclass
+class Proportion :
+    """Classe représentant les proportions de chaque molécules au sein du réseau
+
+    Attirbutes
+    ----------
+    host : float
+        Proportion de molécules Host au sein du réseau.
+    tadf : float
+        Proportion de molécules TADF au sein du réseau.
+    fluo : float
+        Proportion de molécules Fluorescent au sein du réseau.
+    """
+    host : float
+    tadf : float
+    fluo : float

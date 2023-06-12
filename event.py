@@ -17,11 +17,11 @@ class Point :
 
     Attributes
     ----------
-    x : int
+    x : float
         Position selon l'axe x.
-    y : int
+    y : float
         Position selon l'axe y.
-    z : int
+    z : float
         Position selon l'axe z.
     """
     x : int
@@ -185,3 +185,24 @@ class Decay(Event) :
     """
 
     radiative : str
+
+@dataclass
+class Capture(Event) :
+    """Dataclasse représentant un événement de type capture électronique au sein du réseau.
+
+    Opération de comparaison implémentée.
+
+    Attributes
+    ----------
+    initial : Point
+        Position de départ de l'événement.
+    final : Point
+        Position d'arrivée de l'événement.
+    tau : float
+        Durée de l'événement.
+    particule : str
+        Type de particule sujette au déplacement. Les types autorisés sont "electron", "hole" et "exciton". \n
+        Ces valeurs sont stockées comme attributs de classe dans la classe Particules.
+    """
+
+    particule : str
