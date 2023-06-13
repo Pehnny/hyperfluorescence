@@ -29,14 +29,35 @@ class Point :
     z : int
 
     def __add__(self, other) :
-        if isinstance(other, Point):
-            return Point(self.x + other.x, self.y + other.y, self.z + other.z)
-        raise TypeError(f"other must be of type point, got {type(other)}")
+        if isinstance(other, (Point, Vector)) :
+            return Vector(self.x + other.x, self.y + other.y, self.z + other.z)
+        elif isinstance(other, (float, int)) :
+            return Vector(self.x + other, self.y + other, self.z + other)
+        raise TypeError(f"other must be of type Vector, float or int, got {type(other)}")
             
     def __sub__(self, other) :
-        if isinstance(other, Point):
-            return Point(self.x - other.x, self.y - other.y, self.z - other.z)
-        raise TypeError(f"other must be of type point, got {type(other)}")
+        if isinstance(other, (Point, Vector)) :
+            return Vector(self.x - other.x, self.y - other.y, self.z - other.z)
+        elif isinstance(other, (float, int)) :
+            return Vector(self.x - other, self.y - other, self.z - other)
+        raise TypeError(f"other must be of type Vector, float or int, got {type(other)}")
+
+
+@dataclass
+class Vector(Point) :
+    x : float
+    y : float
+    z : float
+    
+    def __mul__(self, other) :
+        if isinstance(other, (Vector, Point)) :
+            return self.x * other.x + self.y * other.y + self.z * other.z
+        elif isinstance(other, (float, int)) :
+            return Vector(self.x * other, self.y * other, self.z * other)
+        raise TypeError(f"other must be of type Vector, float or int, got {type(other)}")
+    
+    def __rmul__(self, other) :
+        return self * other
 
 
 @dataclass
@@ -95,9 +116,10 @@ class Particules :
     hole : str = "hole"
     exciton : str = "exciton"
 
+
 @dataclass
 class Move(Event) :
-    """Dataclasse représentant un événement de type déplacement au sein du réseau.
+    """Dataclasse représentant un événement de type déplacement.
 
     Opération de comparaison implémentée.
 
@@ -129,9 +151,10 @@ class Spins :
     direct : str = "ISC"
     reverse : str = "RISC"
 
+
 @dataclass
 class Isc(Event) :
-    """Dataclasse représentant un événement de type conversion intersystème au sein du réseau.
+    """Dataclasse représentant un événement de type conversion intersystème.
 
     Opération de comparaison implémentée.
 
@@ -164,9 +187,10 @@ class Radiation :
     non_radiative : str = "NR"
     fluorescent : str = "Fluo"
 
+
 @dataclass
 class Decay(Event) :
-    """Dataclasse représentant un événement de type décroissance au sein du réseau.
+    """Dataclasse représentant un événement de type décroissance.
 
     Opération de comparaison implémentée.
 
@@ -186,9 +210,10 @@ class Decay(Event) :
 
     radiative : str
 
+
 @dataclass
 class Capture(Event) :
-    """Dataclasse représentant un événement de type capture électronique au sein du réseau.
+    """Dataclasse représentant un événement de type capture électronique.
 
     Opération de comparaison implémentée.
 
@@ -206,3 +231,9 @@ class Capture(Event) :
     """
 
     particule : str
+
+
+@dataclass
+class Unbound(Event) :
+    """Classe représentant un événement de type séparation des charges d'un exciton."""
+    ...

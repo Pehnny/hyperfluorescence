@@ -147,10 +147,15 @@ class Molecule :
         if self.electron and self.hole :
             self.exciton = Exciton(self.seed.random())
 
+    def unbound_exciton(self) -> None :
+        if hasattr(self, "exciton") :
+            del self.exciton
+        raise AttributeError(f"{self.unbound_exciton.__name__} : Exciton attribute doesn't exist.")
+
     def exciton_decay(self) -> bool :
         """Détruit l'attribut exciton et remet les attributs electron et hole en False.
         """
-        raise NotImplementedError(f"{__name__} is not implemented for {self.__class__.__name__}")
+        raise NotImplementedError(f"{self.exciton_decay.__name__} is not implemented.")
 
 
 class Fluorescent(Molecule) :
@@ -243,7 +248,7 @@ class Fluorescent(Molecule) :
             self.hole = False
             del self.exciton
             return output
-        raise AttributeError(f"Attribute exciton doesn't exist.")
+        raise AttributeError(f"{self.exciton_decay.__name__} : Exciton attribute doesn't exist.")
 
 
 class TADF(Molecule) :
@@ -338,7 +343,7 @@ class TADF(Molecule) :
             self.hole = False
             del self.exciton
             return output
-        raise AttributeError(f"Attribute exciton doesn't exist.")
+        raise AttributeError(f"{self.exciton_decay.__name__} : Exciton attribute doesn't exist.")
         
     def intersystem_crossing(self) -> None :
         """Converti l'état de spin de l'exciton.
@@ -351,7 +356,7 @@ class TADF(Molecule) :
         if hasattr(self, "exciton") :
             self.exciton.reverse_spin()
             return
-        raise AttributeError("Attribute exciton doesn't exist.")
+        raise AttributeError(f"{self.intersystem_crossing.__name__} : Exciton attribute doesn't exist.")
 
 
 class Host(Molecule) :
@@ -444,7 +449,7 @@ class Host(Molecule) :
             self.hole = False
             del self.exciton
             return False
-        raise AttributeError(f"Attribute exciton doesn't exist.")
+        raise AttributeError(f"{self.exciton_decay.__name__} : Exciton attribute doesn't exist.")
 
 
 @dataclass
