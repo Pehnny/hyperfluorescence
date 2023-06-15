@@ -36,22 +36,12 @@ class Exciton :
         number : int
             Nombre aléatoire qui permet de déterminer l'état de spin de l'exciton.
         """
-        self._spin : bool = self._spin_state(number)
+        self.spin : bool = self._spin_state(number)
 
     def __repr__(self) -> str:
         """Retourne l'état de spin de l'Exciton sous forme de texte.
         """
         return "singlet state exciton" if self.spin else "triplet state exciton"
-
-    @property
-    def spin(self) :
-        """Propriété spin.
-        """
-        return self._spin
-    
-    @spin.setter
-    def spin(self, state : bool) :
-        self._spin = state
 
     def _spin_state(self, number : float) -> bool :
         """Génère l'état de spin de l'Exciton selon l'entrée.
@@ -99,6 +89,9 @@ class Molecule :
         Présence d'un électron dans la molécule.
     hole : bool
         Présence d'un trou dans la molécule.
+    has_exciton : bool
+        Présence d'un exciton dans la molécule. Plus consistant avec electron et hole.
+        Joue le rôle de hasattr().
     seed : Generator
         Graine de nombres pseudo-aléatoires propre à l'instance de la molécule.
 
@@ -129,6 +122,7 @@ class Molecule :
         self.neighbors : list[Point] = voisins
         self.electron : bool = False
         self.hole : bool = False
+        self.has_exciton : bool = False
         self.seed : Random = Random()
     
     def switch_electron(self) -> None :
@@ -145,10 +139,12 @@ class Molecule :
         """Génère l'attribut exciton si les attributs electron et hole sont True.
         """
         if self.electron and self.hole :
+            self.has_exciton = True
             self.exciton = Exciton(self.seed.random())
 
     def unbound_exciton(self) -> None :
-        if hasattr(self, "exciton") :
+        if self.has_exciton :
+            self.has_exciton = False
             del self.exciton
         raise AttributeError(f"{self.unbound_exciton.__name__} : Exciton attribute doesn't exist.")
 
@@ -173,6 +169,9 @@ class Fluorescent(Molecule) :
         Présence d'un électron dans la molécule.
     hole : bool
         Présence d'un trou dans la molécule.
+    has_exciton : bool
+        Présence d'un exciton dans la molécule. Plus consistant avec electron et hole.
+        Joue le rôle de hasattr().
     seed : Generator
         Graine de nombres pseudo-aléatoires propre à l'instance de la molécule.
     homo_energy : float
@@ -242,11 +241,12 @@ class Fluorescent(Molecule) :
         AttributeError
             Erreur levée quand la molécule n'a pas d'exciton moléculaire.
         """
-        if hasattr(self, "exciton") :
+        if self.has_exciton :
             output : bool = self.exciton.spin
+            del self.exciton
+            self.has_exciton = False
             self.electron = False
             self.hole = False
-            del self.exciton
             return output
         raise AttributeError(f"{self.exciton_decay.__name__} : Exciton attribute doesn't exist.")
 
@@ -266,6 +266,9 @@ class TADF(Molecule) :
         Présence d'un électron dans la molécule.
     hole : bool
         Présence d'un trou dans la molécule.
+    has_exciton : bool
+        Présence d'un exciton dans la molécule. Plus consistant avec electron et hole.
+        Joue le rôle de hasattr().
     seed : Generator
         Graine de nombres pseudo-aléatoires propre à l'instance de la molécule.
     homo_energy : float
@@ -339,9 +342,10 @@ class TADF(Molecule) :
         """
         if hasattr(self, "exciton") :
             output : bool = self.exciton.spin
+            del self.exciton
+            self.has_exciton = False
             self.electron = False
             self.hole = False
-            del self.exciton
             return output
         raise AttributeError(f"{self.exciton_decay.__name__} : Exciton attribute doesn't exist.")
         
@@ -353,7 +357,7 @@ class TADF(Molecule) :
         AttributeError
             Erreur levée quand la molécule n'a pas d'exciton moléculaire.
         """
-        if hasattr(self, "exciton") :
+        if self.has_exciton :
             self.exciton.reverse_spin()
             return
         raise AttributeError(f"{self.intersystem_crossing.__name__} : Exciton attribute doesn't exist.")
@@ -374,6 +378,9 @@ class Host(Molecule) :
         Présence d'un électron dans la molécule.
     hole : bool
         Présence d'un trou dans la molécule.
+    has_exciton : bool
+        Présence d'un exciton dans la molécule. Plus consistant avec electron et hole.
+        Joue le rôle de hasattr().
     seed : Generator
         Graine de nombres pseudo-aléatoires propre à l'instance de la molécule.
     homo_energy : float
@@ -444,10 +451,11 @@ class Host(Molecule) :
         AttributeError
             Erreur levée quand la molécule n'a pas d'exciton moléculaire.
         """
-        if hasattr(self, "exciton") :
+        if self.has_exciton :
+            del self.exciton
+            self.has_exciton = False
             self.electron = False
             self.hole = False
-            del self.exciton
             return False
         raise AttributeError(f"{self.exciton_decay.__name__} : Exciton attribute doesn't exist.")
 

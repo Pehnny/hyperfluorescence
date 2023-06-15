@@ -106,34 +106,49 @@ class lattice :
     """
     
     def __init__(self, dimension : tuple[int,int,int],
-                 proportion : tuple[float,float,float], electric_field : float = 10.**8,
+                 proportions : tuple[float,float,float], electric_field : float = 10.**8,
                  charges : int = 10, architecture : str = NotImplemented) -> None :
         self._seed : Random = Random()
-        self._dimension : Point = Point(*dimension)
-        self._proportion : Proportion = Proportion(*proportion)
-        self._electric_field : Vector = Vector(0, 0, electric_field)    # [eV/m]
-        self._lattice_constant : float = 1.                             # [nm]
-        self._transfer_rate : float = 10.**13                           # [Hz]
-        self._temperature : float = 300.                                # [K]
+        self._lattice_parameters_creation(dimension, proportions, electric_field, charges)
         self._grid : list[list[list[Host | TADF | Fluorescent]]] = self._construction()
-        self._charges : int = charges
-        self._electrons_positions : list[Point] = self._injection(self._dimension.z - 1, charges)
-        self._holes_positions : list[Point] = self._injection(0, charges)
-        for electron, hole in zip(self._electrons_positions, self._holes_positions):
-            self._grid[electron.z][electron.y][electron.x].switch_electron()
-            self._grid[hole.z][hole.y][hole.x].switch_hole()
+        self._charges_injection()
+        self._event_lists_creation()
         self._recombinaisons : int = 0
         self._emission : int = 0
         self._IQE : float = 0.
         self.events_LUMO : list[Event] = []
         self.events_HOMO: list[Event] = []
         self.events_Exciton: list[Event] = []
-        # Ordre
-        self.where = where()    # Stocke le nombre de recombinaison par matériau
-        # Temps
-        self.time : float = 0.    # temps écoulé
+        self.time : float = 0.
+
+    ###############################################
+    ####____Méthodes de démarrage du réseau____####
+    ###############################################
+    def _lattice_parameters_creation(self, dimension : tuple[int,int,int],
+                                     proportions : tuple[float,float,float], electric_field : float,
+                                     charges : int) -> None :
+        """Méthode générant les attributs : \n
+        self._dimension : Point \n
+        self._proportions : Proportion \n
+        self._electric_field : Vector \n
+        self._lattice_constant : float \n
+        self._transfer_rate : float \n
+        self._temperature : float \n
+        self._charges : int
+        """
+        self._dimension : Point = Point(*dimension)
+        self._proportions : Proportion = Proportion(*proportions)
+        self._electric_field : Vector = Vector(0, 0, electric_field)    # [eV/m]
+        self._lattice_constant : float = 1.                             # [nm]
+        self._transfer_rate : float = 10.**13                           # [Hz]
+        self._temperature : float = 300.                                # [K]
+        self._charges : int = charges
 
     def _construction(self) -> list[list[list[Host | TADF | Fluorescent]]] :
+        """Méthode construisant le réseau. Les couches en z = 0 et z = z_max sont entièrement composées
+        de molécules hôte. Les autres couches sont composées aléatoirement selon les proportions de chaque
+        type de molécule.
+        """
         if self._dimension.z < 3 :
             raise ValueError(f"The z component of dimension must be > 2, got {self._dimension.z}.")
         x_max : int = self._dimension.x
@@ -159,6 +174,8 @@ class lattice :
         return [[[self._molecule_type(n, Point(x,y,z)) for x, n in enumerate(ssgrid)] for y, ssgrid in enumerate(sgrid)] for z, sgrid in enumerate(grid)]
     
     def _molecule_type(self, n : int, position : Point) -> Host | TADF | Fluorescent :
+        """Méthode convertissant les entiers en type de molécule.
+        """
         if n == 0 :
             return Host(position, self._neighbourhood(position))
         elif n == 1 :
@@ -168,12 +185,17 @@ class lattice :
         raise ValueError(f"n should be 0, 1 or 2, got {n}")
 
     def _neighbourhood(self, position : Point, distance : int = 1) -> list[Point] :
+        """Méthode déterminant les voisins d'une molécule.
+        """
         x_range = self._born_von_karman(position.x, distance, "x")
         y_range = self._born_von_karman(position.y, distance, "y")
         z_range = self._born_von_karman(position.z, distance, "z")
         return [Point(x,y,z) for x in x_range for y in y_range for z in z_range if (x, y, z) != (position.x, position.y, position.z)]
 
     def _born_von_karman(self, position : int, distance : int, axe : str) -> list[int] :
+        """Méthode déterminant quels voisins sont valides selon le principe de motif périodique.
+        L'axe z est le seul qui ne reboucle pas.
+        """
         size = getattr(self._dimension, axe)
         lower_bound = position - distance
         upper_bound = position + distance
@@ -190,112 +212,117 @@ class lattice :
             else :
                 return list(range(position - distance, size))
     
-    def _injection(self, z : int, charges : int) -> list[Point] :
+    def _charges_injection(self) -> None :
+        """Méthode injectant les charges dans le réseau. Génère les attributs : \n
+        self._electron_positions : list[Point] \n
+        self._hole_positions : list[Point] \n
+        self._exciton_positions : list[Point] \n
+        """
         molecules = self._dimension.x * self._dimension.y
-        if charges > molecules :
-            raise ValueError(f"Required {charges} charges but only {molecules} molecules available.")
-        possibilities = (Point(x, y, z) for x in range(self._dimension.x) for y in self._dimension.y)
-        return self._seed.sample(possibilities, k = charges)
-
-    ########################################################
-    #
-    #   Fonctions qui suppriment les événements obsolètes
-    #
-    ########################################################
+        if self._charges> molecules :
+            raise ValueError(f"Required {self._charges} charges but only {molecules} molecules available.")
+        positions = (
+                Point(x, y, 0)
+                for x in range(self._dimension.x)
+                for y in range(self._dimension.y)
+            )
+        self._electrons_positions : list[Point] = self._seed.sample(positions, k = self._charges)
+        positions = (
+                Point(x, y, self._dimension.z - 1)
+                for x in range(self._dimension.x)
+                for y in range(self._dimension.y)
+            )
+        self._holes_positions : list[Point] = self._seed.sample(positions, k = self._charges)
+        self._exciton_positions : list[Point] = []
+        for electron, hole in zip(self._electrons_positions, self._holes_positions) :
+            self._grid[electron.z][electron.y][electron.x].switch_electron()
+            self._grid[hole.z][hole.y][hole.x].switch_hole()
     
-    # Retire les événement obsolètes selon le type déterminé par First Reaction Method
-    # Arguments :   - evenement : événement choisi par First Reaction Method sur lequel on travaille
-    def _obsoletes(self, evenement : event) :
-        reaction = evenement.REACTION
-        # Désintégration d'un exciton ? 
-        if reaction == "decay" or reaction == "fluorescence" :
-            self._pop_decay(self.events_Exciton)
-            return
-        # Déplacement d'un électron ?
-        elif reaction == "electron" :
-            self._pop_electron(self.events_LUMO)
-            # Si un exciton s'est formé, il faut nettoyer les trous également.
-            if self._isExciton(evenement.final) :
-                self._pop_hole(self.events_HOMO)
-                return
-            else :
-                return
-        # Déplacement d'un trou ?
-        elif reaction == "trou" :
-            self._pop_hole(self.events_HOMO)
-            # Idem dans l'autre sens
-            if self._isExciton(evenement.final) :
-                self._pop_electron(self.events_LUMO)
-                return
-            else :
-                return
+    def _event_lists_creation(self) -> None :
+        """Méthode générant les attributs : \n
+        self._move_electron_events : list[Move] \n
+        self._move_hole_events : list[Move] \n
+        self._move_exciton_events : list[Move] \n
+        self._decay_events : list[Decay] \n
+        self._isc_events : list[ISC] \n
+        self._capture_events : list[Capture] \n
+        self._binding_events : list[Binding]
+        """
+        self._move_electron_events : list[Move] = []
+        self._move_hole_events : list[Move] = []
+        self._move_exciton_events : list[Move] = []
+        self._decay_events : list[Decay] = []
+        self._isc_events : list[ISC] = []
+        self._capture_events : list[Capture] = []
+        self._binding_events : list[Binding] = []
     
-    # Retire les événements de type exciton et decay
-    # Arguments :   - tab : liste des événements sur lesquels on travaille (événements de type "exciton" et "decay")
-    def _pop_decay(self, tab : list[event]) :
-        obso = []
-        for events in tab :
-            # Molécules sans électrons
-            if not self._isExciton(events.initial) :
-                obso.append(events)
-                continue
-            continue
-        for events in obso :
-            tab.remove(events)
-        return
+    #########################################################
+    ####____Méthodes de tri des événements inutulisés____####
+    #########################################################
+    def _remove_unused_events(self, event : Event) -> None :
+        if isinstance(event, Move) :
+            if is_electron(event.particule) :
+                self._remove_move(event)
+            elif is_hole(event.particule) :
+                self._remove_move(event)
+            elif is_exciton(event.particule) :
+                self._remove_move(event)
+        elif isinstance(event, Decay) :
+            self._remove_decay(event)
+        elif isinstance(event, Capture) :
+            self._remove_capture(event)
+        elif isinstance(event, Binding) :
+            ...
+        elif isinstance(event, ISC) :
+            ...
+        raise TypeError(f"event type must be in the event module, got {type(event)}.")
 
-    # Retire les événements de type déplacement d'électron
-    # Arguments :   - tab : liste des événements sur lesquels on travaille (événements de type "electron")
-    def _pop_electron(self, tab : list[event]) :
-        obso = []
-        for events in tab :
-            # Molécules sans electrons
-            if not self._isElectron(events.initial) :
-                obso.append(events)
-                continue
-            # Molécules avec un exciton
-            elif self._isExciton(events.initial) :
-                obso.append(events)
-                continue
-            # Molécule avec un électron et dont le voisin est occupé
-            elif self._isElectron(events.initial) and self._isElectron(events.final) :
-                obso.append(events)
-                continue
-            continue
-        for events in obso :
-            tab.remove(events)
-        return
+    def _remove_move(self, event : Move) :
+        if is_electron(event.particule) :
+            self._move_electron_events = [
+                move
+                for move in self._move_electron_events
+                if move.initial != event.initial and move.final != event.final
+            ]
+        elif is_hole(event.particule) :
+            self._move_hole_events = [
+                move
+                for move in self._move_hole_events
+                if move.initial != event.initial and move.final != event.final
+            ]
+        elif is_exciton(event.particule) :
+            self._move_exciton_events = [
+                move
+                for move in self._move_exciton_events
+                if move.initial != event.initial and move.final != event.final
+            ]
+            self._move_electron_events = [
+                move
+                for move in self._move_electron_events
+                if move.final != event.final
+            ]
+            self._move_hole_events = [
+                move
+                for move in self._move_hole_events
+                if move.final != event.final
+            ]
+        raise ValueError(f"event.particule must be in the PARTICULES dict from the event module, got {event.particule}.")
 
-    # Retire les événements de type déplacement de trou
-    # Arguments :   - tab : liste des événements sur lesquels on travaille (événements de type "trou")
-    def _pop_hole(self, tab : list[event]) :
-        obso = []
-        for events in tab :
-            # Molécules vides
-            if not self._isHole(events.initial) :
-                obso.append(events)
-                continue
-            # Molécules avec un exciton
-            elif self._isExciton(events.initial) :
-                obso.append(events)
-                continue
-            # Molécule avec un trou et dont le voisin est occupé
-            elif self._isHole(events.initial) and self._isHole(events.final) :
-                obso.append(events)
-                continue
-            continue
-        for events in obso :
-            tab.remove(events)
-        return
+    def _remove_decay(self, event : Decay) :
+        self._decay_events = [
+            decay
+            for decay in self._decay_events
+            if decay is not event
+        ]
+
+    def _remove_capture(self, event : Capture) :
+        self._capture_events = [
+            capture
+            for capture in self._capture_events
+            if capture is not event
+        ]
     
-    ########################################################
-    #
-    #   Fonctions qui créent les nouveaux événements
-    #
-    ########################################################
-
-    # Détermine le type de molécule sur lequel un exciton s'est formé
-    # Arguments :   - pos : position à laquelle l'exciton s'est formé
+    ####____Méthode d'extraction des données____####
     def _exciton_POS(self, pos : point) :
         if isinstance(self._grid[pos.x][pos.y][pos.z], host) :
             self.where.host()
@@ -306,9 +333,9 @@ class lattice :
         else :
             print ("exciton_POS : exciton formé sur une molécule de type inconnue")
 
-    # Vérifie le spin de l'exciton. Si singulet, ajoute l'événement
-    # Arguments :   - pos : position de la molécule
-    #               - react : type d'événement
+    ####################################################
+    ####____Méthodes qui génèrent les événements____####
+    ####################################################
     def _event_Exciton(self, pos : point) :
         self.recombinaisons += 1
         self._exciton_POS(pos)
@@ -480,27 +507,6 @@ class lattice :
                 continue
         return
 
-    ########################################################
-    #
-    #   Fonctions qui déterminent la présence des charges
-    #
-    ########################################################
-
-    # Vérifie la présence d'un électron
-    # Arguments :   - point : position à laquelle on vérifie
-    def _isElectron(self, point : point) -> bool :
-        return self._grid[point.x][point.y][point.z].electron
-
-    # Vérifie la présence d'un trou
-    # Arguments :   - point : position à laquelle on vérifie
-    def _isHole(self, point : point) -> bool :
-        return self._grid[point.x][point.y][point.z].hole
-
-    # Vérifie la présence d'un exciton 
-    # Arguments :   - point : position à laquelle on vérifie   
-    def _isExciton(self, point : point) -> bool :
-        return isinstance(self._grid[point.x][point.y][point.z].exciton, exciton)
-
     ####################################################
     #
     #   First Reaction Method
@@ -611,76 +617,109 @@ class lattice :
             return
         else :
             return
-        
-    ########################################################
-    #
-    #   Visualisation
-    #
-    ########################################################
-    # Fonction d'affichage du réseau
-    @elapsedTime("Plot :")
+    
+    ##################################################################
+    ####____Méthode d'affichage du réseau dans son état actuel____####
+    ##################################################################
+    def get_molecule_type(self, position : Point) -> type :
+        """Méthode retournant le type de la molécule à la position donnée.
+        """
+        return type(self._grid[position.z][position.y][position.x])
+
+
     def Plot(self, nom : str = "Inconnu") :
         use("Agg")
-        plt.figure(dpi=100)
+        plt.figure(dpi=50)
         axes = plt.axes(projection = "3d")
-        # Création des points pour les molécules chargées
-        electrons = self.electronPositions
-        trous = self.trouPositions
-        excitons = [electron for electron, trou in zip(electrons, trous) if electron == trou]
-        legende = []
-        # Création du nuage de point
-        x, y, z = [], [], []
-        if len(electrons) > 0 :
-            for pos in electrons :
-                x.append(pos.x)
-                y.append(pos.y)
-                z.append(pos.z)
-            axes.scatter(x, y, z, marker = 'o', color = 'b')
-            legende.append("electrons")
-            x.clear()
-            y.clear()
-            z.clear()
-        if len(trous) > 0 :
-            for pos in trous :
-                x.append(pos.x)
-                y.append(pos.y)
-                z.append(pos.z)
-            axes.scatter(x, y, z, marker = 'o', color = 'r')
-            legende.append("trous")
-            x.clear()
-            y.clear()
-            z.clear()
-        if len(excitons) > 0 :
-            for pos in excitons :
-                x.append(pos.x)
-                y.append(pos.y)
-                z.append(pos.z)
-            axes.scatter(x, y, z, marker = 'o', color = 'g')
-            legende.append("exciton")
-            x.clear()
-            y.clear()
-            z.clear()
-        # Contour du réseau
-        xgrid = [0, self._dimension[0]-1]
-        ygrid = [0, self._dimension[1]-1]
-        zgrid = [0, self._dimension[2]-1]
-        for i in xgrid :
-            for j in ygrid :
-                axes.plot([i,i], [j,j], [0, self._dimension[2]-1], color = "k", linewidth = 1)
-            for k in zgrid :
-                axes.plot([i,i], [0, self._dimension[1]-1], [k,k], color = "k", linewidth = 1)
-        for j in ygrid :
-            for k in zgrid :
-                axes.plot([0, self._dimension[0]-1], [j,j], [k,k], color = "k", linewidth = 1)
-        # Options du graphique
-        plt.legend(legende)
+
+        color = "b"
+        electron_host = [
+            position
+            for position in self._electrons_positions
+            if self.get_molecule_type(position) is Host
+        ]
+        if len(electron_host) > 0 :
+            marker_style = "o"
+            x = (position.x for position in electron_host)
+            y = (position.y for position in electron_host)
+            z = (position.z for position in electron_host)
+            axes.scatter(x, y, z, c = color, marker = marker_style)
+        electron_tadf = [
+            position
+            for position in self._electrons_positions
+            if self.get_molecule_type(position) is TADF
+        ]
+        if len(electron_tadf) > 0 :
+            marker_style = "s"
+            x = (position.x for position in electron_tadf)
+            y = (position.y for position in electron_tadf)
+            z = (position.z for position in electron_tadf)
+            axes.scatter(x, y, z, c = color, marker = marker_style)
+        electron_fluorescent = [
+            position
+            for position in self._electrons_positions
+            if self.get_molecule_type(position) is Fluorescent
+        ]
+        if len(electron_fluorescent) > 0 :
+            marker_style = "^"
+            x = (position.x for position in electron_fluorescent)
+            y = (position.y for position in electron_fluorescent)
+            z = (position.z for position in electron_fluorescent)
+            axes.scatter(x, y, z, c = color, marker = marker_style)
+
+        color = "r"
+        hole_host = [
+            position
+            for position in self._holes_positions
+            if self.get_molecule_type(position) is Host
+        ]
+        if len(hole_host) > 0 :
+            marker_style = "o"
+            x = (position.x for position in hole_host)
+            y = (position.y for position in hole_host)
+            z = (position.z for position in hole_host)
+            axes.scatter(x, y, z, c = color, marker = marker_style)
+        hole_tadf = [
+            position
+            for position in self._holes_positions
+            if self.get_molecule_type(position) is TADF
+        ]
+        if len(hole_tadf) > 0 :
+            marker_style = "s"
+            x = (position.x for position in hole_host)
+            y = (position.y for position in hole_host)
+            z = (position.z for position in hole_host)
+            axes.scatter(x, y, z, c = color, marker = marker_style)
+        hole_fluorescent = [
+            position
+            for position in self._holes_positions
+            if self.get_molecule_type(position) is Fluorescent
+        ]
+        if len(hole_fluorescent) > 0 :
+            marker_style = "^"
+            x = (position.x for position in hole_host)
+            y = (position.y for position in hole_host)
+            z = (position.z for position in hole_host)
+            axes.scatter(x, y, z, c = color, marker = marker_style)
+
+        x_grid = [0, self._dimension[0]-1]
+        y_grid = [0, self._dimension[1]-1]
+        z_grid = [0, self._dimension[2]-1]
+        for x in x_grid :
+            for y in y_grid :
+                axes.plot([x,x], [y,y], [0, self._dimension[2]-1], linestyle = "dashed", color = "k")
+            for z in z_grid :
+                axes.plot([x,x], [0, self._dimension[1]-1], [z,z], linestyle = "solid", color = "k")
+        for y in y_grid :
+            for z in z_grid :
+                axes.plot([0, self._dimension[0]-1], [y,y], [z,z], linestyle = "solid", color = "k")
+
         axes.set_xlabel("x", size = 16)
         axes.set_ylabel("y", size = 16)
         axes.set_zlabel("z", size = 16)
-        axes.set_xlim([0, self._dimension[0] - 1])
-        axes.set_ylim([0, self._dimension[1] - 1])
-        axes.set_zlim([0, self._dimension[2] - 1])
-        # Affichage
+        axes.set_xlim([0, self._dimension.x - 1])
+        axes.set_ylim([0, self._dimension.y - 1])
+        axes.set_zlim([0, self._dimension.z - 1])
         plt.tight_layout()
         plt.savefig(nom, bbox_inches = "tight")
         plt.close()

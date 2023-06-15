@@ -7,7 +7,123 @@
 #
 #
 #########################################################################################################
+"""Module contenant les dictionnaires, fonctions et classes représentants les points et les événements.
+
+Dictionnaires
+-------------
+Les valeurs sont arbitraires mais uniques pour éviter toute utilisation indésirable.
+PARTICULES : {electron : 0, hole : 1, exciton : 2}
+    Dictionnaire contenant les types de charges. Les valeurs sont arbitraires.
+CROSSING : {ISC : 3, RISC : 4}
+    Dictionnaire contenant les sens de conversion intersystème. Les valeurs sont arbitraires.
+    ISC correspond au sens singulet-triplet et RISC au sens triplet-singulet.
+RADIATION : {NR : 5, fluorescent : 6}
+    Dictionnaire contenant les modes de radiation. Les valeurs sont arbitraires.
+BOUND_STATES : {bound : 7, unbound : 8}
+    Dictionnaire contenant les états de liaison des excitons. Les valeurs sont arbitraires.
+
+Fonctions
+---------
+is_electron(value : int) -> bool
+    Vérifie si value correspond à la valeur de l'électron stockée dans le dictionnaire PARTICULES.
+is_hole(value : int) -> bool
+    Vérifie si value correspond à la valeur du trou stockée dans le dictionnaire PARTICULES.
+is_exciton(value : int) -> bool
+    Vérifie si value correspond à la valeur de l'exciton stockée dans le dictionnaire PARTICULES.
+def is_ISC(value : int) -> bool
+    Vérifie si value correspond à la valeur de ISC stockée dans le dictionnaire CROSSING.
+is_RISC(value : int) -> bool
+    Vérifie si value correspond à la valeur de RISC stockée dans le dictionnaire CROSSING.
+is_NR(value : int) -> bool
+    Vérifie si value correspond à la valeur de NR stockée dans le dictionnaire RADIATION.
+is_fluorescent(value : int) -> bool
+    Vérifie si value correspond à la valeur de fluorescent stockée dans le dictionnaire RADIATION.
+is_bound(value : int) -> bool
+    Vérifie si value correspond à la valeur de bound stockée dans le dictionnaire BOUND_STATES.
+is_unbound(value : int) -> bool
+    Vérifie si value correspond à la valeur de unbound stockée dans le dictionnaire BOUND_STATES.
+
+Classes
+-------
+Point() : x, y, z
+    Classe représentant un point. Les points peuvent s'additionner et se soutraire.
+    Dans ce cas, le point est converti en vecteur, même dans le cas d'opération avec des nombres.
+Vector(Point) : x, y, z
+    Classe représentant un vecteur. Les vecteurs peuvent également se multiplier.
+    La multiplication entre deux vecteurs donne le produit scalaire.
+    La multiplication par un nombre donne un nouveau vecteur.
+
+Event() : initial, final, tau
+    Classe représentant un événement. Ceux-ci sont caractérisé par une position initiale,
+    une position finale et une durée (tau).
+Move(Event) : initial, final, tau, particule
+    Classe représentant un événement de type déplacement. Contient aussi le type de particule à déplacer.
+    Utilisé pour déplacer les charges au sein du réseau.
+ISC(Event) : initial, final, tau, conversion
+    Classe représentant un événement de type conversion intersystème. Contient aussi le sens de réaction.
+    Utilisé pour les changement d'état de spin des excitons.
+Decay(Event) : initial, final, tau, radiation
+    Classe représentant un événement de type décroissance. Contient aussi le type de décroissance.
+    Utilisé pour l'émission d'exciton.
+Capture(Event) : initial, final, tau, particule
+    Classe représentant un événement de type capture électronique. Contient aussi le type de particule.
+    Utilisé pour la capture électronique aux électrodes opposées.
+    Ne doit pas être utilisé pour des excitons.
+Binding(Event), initial, final, tau, state
+    Classe représentant un événement de type liaison/séparation. Contient aussi l'état de liaison.
+    Utilisé pour la création et séparation des excitons. 
+"""
+
 from dataclasses import dataclass
+
+
+PARTICULES : dict[str, int] = {
+    "electron" : 0,
+    "hole" : 1,
+    "exciton" : 2
+}
+
+CROSSING : dict[str, int] = {
+    "ISC" : 3,
+    "RISC" : 4
+}
+
+RADIATION : dict[str, int] = {
+    "NR" : 5,
+    "fluorescent" : 6
+}
+
+BOUND_STATE : dict[str, int] = {
+    "bound" : 7,
+    "unbound" : 8
+}
+
+def is_electron(value : int) -> bool :
+        return value == PARTICULES["electron"]
+
+def is_hole(value : int) -> bool :
+        return value == PARTICULES["hole"]
+
+def is_exciton(value : int) -> bool :
+        return value == PARTICULES["exciton"]
+
+def is_ISC(value : int) -> bool :
+        return value == CROSSING["ISC"]
+
+def is_RISC(value : int) -> bool :
+        return value == CROSSING["RISC"]
+
+def is_NR(value : int) -> bool :
+        return value == RADIATION["NR"]
+
+def is_fluorescent(value : int) -> bool :
+        return value == RADIATION["fluorescent"]
+
+def is_bound(value : int) -> bool :
+        return value == BOUND_STATE["bound"]
+
+def is_unbound(value : int) -> bool :
+        return value == BOUND_STATE["unbound"]
 
 @dataclass
 class Point :
@@ -100,23 +216,6 @@ class Event :
         raise TypeError(f"other must be of type event, got {type(other)}")
 
 
-class Particules :
-    """Classe contenant les types de particules pour les événements de type Move.
-
-    Attributes
-    ----------
-    electron : str = "electron"
-
-    hole : str = "hole"
-
-    exciton : str = "exciton"    
-    """
-
-    electron : str = "electron"
-    hole : str = "hole"
-    exciton : str = "exciton"
-
-
 @dataclass
 class Move(Event) :
     """Dataclasse représentant un événement de type déplacement.
@@ -136,24 +235,11 @@ class Move(Event) :
         Ces valeurs sont stockées comme attributs de classe dans la classe Particules.
     """
 
-    particule : str
-
-
-class Spins :
-    """Classe contenant les sens de conversion intersystème pour les événements de type Isc.
-
-    Attributes
-    ----------
-    direct : str = "direct"
-    reverser : str = "reverse"
-    """
-
-    direct : str = "ISC"
-    reverse : str = "RISC"
+    particule : int
 
 
 @dataclass
-class Isc(Event) :
+class ISC(Event) :
     """Dataclasse représentant un événement de type conversion intersystème.
 
     Opération de comparaison implémentée.
@@ -167,25 +253,11 @@ class Isc(Event) :
     tau : float
         Durée de l'événement.
     conversion : str
-        Sens de la conversion intersystème. Peut être "direct" (triplet-singlet) ou "reverse" (singlet-triplet). \n
-        Les sens de réaction sont stockée dans la classe Spins.
+        Sens de la conversion intersystème. Peut être "direct" (singlet-triplet) ou "reverse" (triplet-singlet). \n
+        Les sens de réaction sont stockée dans la classe Crossing.
     """
 
-    conversion : str
-
-
-class Radiation :
-    """Classe contenant les types de décroissances pour les événements de type Decay.
-
-    Attributes
-    ----------
-    non_radiative : str = "NR"
-
-    fluorescent : str = "Fluo"
-    """
-
-    non_radiative : str = "NR"
-    fluorescent : str = "Fluo"
+    conversion : int
 
 
 @dataclass
@@ -208,7 +280,7 @@ class Decay(Event) :
         dans la classe Radiation.
     """
 
-    radiative : str
+    radiation : int
 
 
 @dataclass
@@ -226,14 +298,30 @@ class Capture(Event) :
     tau : float
         Durée de l'événement.
     particule : str
+        Type de particule sujette au déplacement. Les types autorisés sont "e-" ou "h+" \n
+        Ces valeurs sont stockées comme attributs de classe dans la classe Particules.
+    """
+
+    particule : int
+
+
+@dataclass
+class Binding(Event) :
+    """Classe représentant un événement de type séparation des charges d'un exciton.
+
+    Opération de comparaison implémentée.
+
+    Attributes
+    ----------
+    initial : Point
+        Position de départ de l'événement.
+    final : Point
+        Position d'arrivée de l'événement.
+    tau : float
+        Durée de l'événement.
+    bounding : str
         Type de particule sujette au déplacement. Les types autorisés sont "electron", "hole" et "exciton". \n
         Ces valeurs sont stockées comme attributs de classe dans la classe Particules.
     """
 
-    particule : str
-
-
-@dataclass
-class Unbound(Event) :
-    """Classe représentant un événement de type séparation des charges d'un exciton."""
-    ...
+    state : int
