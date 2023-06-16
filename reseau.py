@@ -105,6 +105,9 @@ class lattice :
     
     """
     
+    ###############################################
+    ####____Méthodes de démarrage du réseau____####
+    ###############################################
     def __init__(self, dimension : tuple[int,int,int],
                  proportions : tuple[float,float,float], electric_field : float = 10.**8,
                  charges : int = 10, architecture : str = NotImplemented) -> None :
@@ -112,30 +115,15 @@ class lattice :
         self._lattice_parameters_creation(dimension, proportions, electric_field, charges)
         self._grid : list[list[list[Host | TADF | Fluorescent]]] = self._construction()
         self._charges_injection()
-        self._event_lists_creation()
+        self._events_creation()
         self._recombinaisons : int = 0
         self._emission : int = 0
         self._IQE : float = 0.
-        self.events_LUMO : list[Event] = []
-        self.events_HOMO: list[Event] = []
-        self.events_Exciton: list[Event] = []
         self.time : float = 0.
 
-    ###############################################
-    ####____Méthodes de démarrage du réseau____####
-    ###############################################
     def _lattice_parameters_creation(self, dimension : tuple[int,int,int],
                                      proportions : tuple[float,float,float], electric_field : float,
                                      charges : int) -> None :
-        """Méthode générant les attributs : \n
-        self._dimension : Point \n
-        self._proportions : Proportion \n
-        self._electric_field : Vector \n
-        self._lattice_constant : float \n
-        self._transfer_rate : float \n
-        self._temperature : float \n
-        self._charges : int
-        """
         self._dimension : Point = Point(*dimension)
         self._proportions : Proportion = Proportion(*proportions)
         self._electric_field : Vector = Vector(0, 0, electric_field)    # [eV/m]
@@ -155,8 +143,8 @@ class lattice :
         y_max : int = self._dimension.y
         z_max : int = self._dimension.z
         grid_size : int = x_max * y_max * z_max
-        n_fluo : int = int(grid_size * self._proportion.fluo)
-        n_tadf : int = int(grid_size * self._proportion.tadf)
+        n_fluo : int = int(grid_size * self._proportions.fluo)
+        n_tadf : int = int(grid_size * self._proportions.tadf)
         n_host : int = grid_size - 2 * x_max * y_max - n_fluo - n_tadf
         sub_z_max : int = z_max - 2
         sub_grid_size : int = x_max * y_max * sub_z_max
@@ -173,7 +161,8 @@ class lattice :
         del sub_grid
         return [[[self._molecule_type(n, Point(x,y,z)) for x, n in enumerate(ssgrid)] for y, ssgrid in enumerate(sgrid)] for z, sgrid in enumerate(grid)]
     
-    def _molecule_type(self, n : int, position : Point) -> Host | TADF | Fluorescent :
+    def _molecule_type(self, n : int,
+                       position : Point) -> Host | TADF | Fluorescent :
         """Méthode convertissant les entiers en type de molécule.
         """
         if n == 0 :
@@ -184,7 +173,8 @@ class lattice :
             return Fluorescent(position, self._neighbourhood(position))
         raise ValueError(f"n should be 0, 1 or 2, got {n}")
 
-    def _neighbourhood(self, position : Point, distance : int = 1) -> list[Point] :
+    def _neighbourhood(self, position : Point,
+                       distance : int = 1) -> list[Point] :
         """Méthode déterminant les voisins d'une molécule.
         """
         x_range = self._born_von_karman(position.x, distance, "x")
@@ -192,7 +182,8 @@ class lattice :
         z_range = self._born_von_karman(position.z, distance, "z")
         return [Point(x,y,z) for x in x_range for y in y_range for z in z_range if (x, y, z) != (position.x, position.y, position.z)]
 
-    def _born_von_karman(self, position : int, distance : int, axe : str) -> list[int] :
+    def _born_von_karman(self, position : int,
+                         distance : int, axe : str) -> list[int] :
         """Méthode déterminant quels voisins sont valides selon le principe de motif périodique.
         L'axe z est le seul qui ne reboucle pas.
         """
@@ -213,13 +204,8 @@ class lattice :
                 return list(range(position - distance, size))
     
     def _charges_injection(self) -> None :
-        """Méthode injectant les charges dans le réseau. Génère les attributs : \n
-        self._electron_positions : list[Point] \n
-        self._hole_positions : list[Point] \n
-        self._exciton_positions : list[Point] \n
-        """
         molecules = self._dimension.x * self._dimension.y
-        if self._charges> molecules :
+        if self._charges > molecules :
             raise ValueError(f"Required {self._charges} charges but only {molecules} molecules available.")
         positions = (
                 Point(x, y, 0)
@@ -238,100 +224,70 @@ class lattice :
             self._grid[electron.z][electron.y][electron.x].switch_electron()
             self._grid[hole.z][hole.y][hole.x].switch_hole()
     
-    def _event_lists_creation(self) -> None :
-        """Méthode générant les attributs : \n
-        self._move_electron_events : list[Move] \n
-        self._move_hole_events : list[Move] \n
-        self._move_exciton_events : list[Move] \n
-        self._decay_events : list[Decay] \n
-        self._isc_events : list[ISC] \n
-        self._capture_events : list[Capture] \n
-        self._binding_events : list[Binding]
-        """
-        self._move_electron_events : list[Move] = []
-        self._move_hole_events : list[Move] = []
-        self._move_exciton_events : list[Move] = []
-        self._decay_events : list[Decay] = []
-        self._isc_events : list[ISC] = []
-        self._capture_events : list[Capture] = []
-        self._binding_events : list[Binding] = []
+    def _events_creation(self) -> None :
+        self._move_electron_events : list[Event] = self._init_move_electron()
+        self._move_hole_events : list[Event] = self._init_move_hole()
+        self._move_exciton_events : list[Event] = []
+        self._decay_events : list[Event] = []
+        self._isc_events : list[Event] = []
+        self._capture_events : list[Event] = []
+        self._unbound_events : list[Event] = []
+
+    def _init_move_electron(self) -> list[Event] :
+        output : list[Event] = []
+        for position in self._electrons_positions :
+            molecule = self.get_molecule(position)
+            output.extend((
+                Event(position, neighbour, self._LUMO(position, neighbour), EVENTS["move"]["electron"]) 
+                for neighbour in molecule.neighbors
+                if not self.get_molecule(neighbour).electron    
+            ))
+        return output
     
+    def _init_move_hole(self) -> list[Event] :
+        output : list[Event] = []
+        for position in self._holes_positions :
+            molecule = self.get_molecule(position)
+            output.extend((
+                Event(position, neighbour, self._LUMO(position, neighbour), EVENTS["move"]["electron"]) 
+                for neighbour in molecule.neighbors
+                if not self.get_molecule(neighbour).hole  
+            ))
+        return output
+    
+
     #########################################################
     ####____Méthodes de tri des événements inutulisés____####
     #########################################################
-    def _remove_unused_events(self, event : Event) -> None :
-        if isinstance(event, Move) :
+    def _remove_unused_event(self, event : Event) -> None :
+        if is_move_event(event.kind) :
             if is_electron(event.particule) :
-                self._remove_move(event)
+                self._move_electron_events.remove(event)
             elif is_hole(event.particule) :
-                self._remove_move(event)
+                self._move_hole_events.remove(event)
             elif is_exciton(event.particule) :
-                self._remove_move(event)
-        elif isinstance(event, Decay) :
-            self._remove_decay(event)
-        elif isinstance(event, Capture) :
-            self._remove_capture(event)
-        elif isinstance(event, Binding) :
+                self._move_exciton_events.remove(event)
+            raise ValueError(f"event.particule is {event.particule}, expected one of {PARTICULES}.")
+        elif is_decay_event(event.kind) :
+            self._decay_events.remove(event)
+        elif is_ISC_event(event.kind) :
             ...
-        elif isinstance(event, ISC) :
+        elif is_unbound_event(event.kind) :
             ...
-        raise TypeError(f"event type must be in the event module, got {type(event)}.")
+        elif is_capture_event(event.kind) :
+            self._capture_events.remove(event)
+        raise TypeError(f"event must be of type Event, got {type(event)}.")
 
-    def _remove_move(self, event : Move) :
-        if is_electron(event.particule) :
-            self._move_electron_events = [
-                move
-                for move in self._move_electron_events
-                if move.initial != event.initial and move.final != event.final
-            ]
-        elif is_hole(event.particule) :
-            self._move_hole_events = [
-                move
-                for move in self._move_hole_events
-                if move.initial != event.initial and move.final != event.final
-            ]
-        elif is_exciton(event.particule) :
-            self._move_exciton_events = [
-                move
-                for move in self._move_exciton_events
-                if move.initial != event.initial and move.final != event.final
-            ]
-            self._move_electron_events = [
-                move
-                for move in self._move_electron_events
-                if move.final != event.final
-            ]
-            self._move_hole_events = [
-                move
-                for move in self._move_hole_events
-                if move.final != event.final
-            ]
-        raise ValueError(f"event.particule must be in the PARTICULES dict from the event module, got {event.particule}.")
-
-    def _remove_decay(self, event : Decay) :
-        self._decay_events = [
-            decay
-            for decay in self._decay_events
-            if decay is not event
-        ]
-
-    def _remove_capture(self, event : Capture) :
-        self._capture_events = [
-            capture
-            for capture in self._capture_events
-            if capture is not event
-        ]
-    
     ####____Méthode d'extraction des données____####
-    def _exciton_POS(self, pos : point) :
-        if isinstance(self._grid[pos.x][pos.y][pos.z], host) :
-            self.where.host()
-        elif isinstance(self._grid[pos.x][pos.y][pos.z], tadf) :
-            self.where.tadf()
-        elif isinstance(self._grid[pos.x][pos.y][pos.z], fluorescent) :
-            self.where.fluo()
-        else :
-            print ("exciton_POS : exciton formé sur une molécule de type inconnue")
+    # def _exciton_POS(self, pos : point) :
+    #     if isinstance(self._grid[pos.x][pos.y][pos.z], host) :
+    #         self.where.host()
+    #     elif isinstance(self._grid[pos.x][pos.y][pos.z], tadf) :
+    #         self.where.tadf()
+    #     elif isinstance(self._grid[pos.x][pos.y][pos.z], fluorescent) :
+    #         self.where.fluo()
+    #     else :
+    #         print ("exciton_POS : exciton formé sur une molécule de type inconnue")
 
     ####################################################
     ####____Méthodes qui génèrent les événements____####
@@ -580,6 +536,9 @@ class lattice :
         self._PPV(evenement.final)
         self._old_PPV(evenement.initial)
         return True
+    
+    def get_molecule(self, position : Point) -> Host | TADF | Fluorescent :
+        return self._grid[position.z][position.y][position.x]
 
     # Fonction d'appel de l'algorithme de First Reaction Method. Permet de fixer un nombre d'itération maximal et s'arrête dans certains cas.
     # Arguments :   - stop :    Nombre d'itérations après lesquelles on arrête de faire évoluer le réseau

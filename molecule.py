@@ -7,74 +7,16 @@
 #
 #
 #########################################################################################################
-from event import *
+from event import Point
 from random import Random
 from dataclasses import dataclass
 
-
-class Exciton :
-    """Classe représentant un exciton moléculaire.
-
-    Attributes
-    ----------
-    _spin : bool
-        Etat de spin de l'exciton. True pour singulet et False pour triplet.
-        
-    Methods
-    -------
-    spin_state(number : int) -> bool
-        Retourne l'état du spin de l'exciton lors de sa création.
-    reverse_spin() -> None
-        Renverse la valeur de l'attribut spin.
-    """
-
-    def __init__(self, number : float) -> None :
-        """Initialise l'instance de Exciton.
-
-        Parameters
-        ----------
-        number : int
-            Nombre aléatoire qui permet de déterminer l'état de spin de l'exciton.
-        """
-        self.spin : bool = self._spin_state(number)
-
-    def __repr__(self) -> str:
-        """Retourne l'état de spin de l'Exciton sous forme de texte.
-        """
-        return "singlet state exciton" if self.spin else "triplet state exciton"
-
-    def _spin_state(self, number : float) -> bool :
-        """Génère l'état de spin de l'Exciton selon l'entrée.
-
-        Parameters
-        ----------
-        number : int
-            Nombre aléatoire qui permet de déterminer l'état de spin de l'exciton.
-
-        Returns
-        -------
-        bool
-            True si number est dans l'intervalle semi-ouvert [0,0.25). \n
-            False si number est dans l'intervalle semi-ouvert [0.25,1).
-
-        Raises
-        ------
-        ValueError
-            Erreur levée quand le paramètre number est hors de l'intervalle
-            semi-ouvert [0,1).
-        """
-        if 0 <= number < 0.25 :
-            return True
-        elif 0.25 <= number < 1 :
-            return False
-        raise ValueError(f"number = {number} but number must be inside the semi-open interval [0,1)")
-    
-    def reverse_spin(self) -> None :
-        """Renverse l'état de spin de l'Exciton.
-        """
-        self.spin = not self.spin
-        return
-
+EXCITON : dict[str, int] = {
+    "none" : 0,
+    "singlet" : 1,
+    "doublet" : 2,
+    "triplet" : 3
+}
 
 class Molecule :
     """Classe représentant une Molécule organique générique.
@@ -122,7 +64,7 @@ class Molecule :
         self.neighbors : list[Point] = voisins
         self.electron : bool = False
         self.hole : bool = False
-        self.has_exciton : bool = False
+        self.exciton : int = 0
         self.seed : Random = Random()
     
     def switch_electron(self) -> None :
@@ -139,17 +81,18 @@ class Molecule :
         """Génère l'attribut exciton si les attributs electron et hole sont True.
         """
         if self.electron and self.hole :
-            self.has_exciton = True
-            self.exciton = Exciton(self.seed.random())
+            random = self.seed.random()
+            if 0 <= random < 0.25 :
+                self.exciton = EXCITON["singlet"]
+            else :
+                self.exciton = EXCITON["triplet"]
 
     def unbound_exciton(self) -> None :
-        if self.has_exciton :
-            self.has_exciton = False
-            del self.exciton
-        raise AttributeError(f"{self.unbound_exciton.__name__} : Exciton attribute doesn't exist.")
+        if self.exciton :
+            self.exciton = EXCITON["none"]
 
     def exciton_decay(self) -> bool :
-        """Détruit l'attribut exciton et remet les attributs electron et hole en False.
+        """Méthode représentant la recombinaison d'un exciton, avec ou sans émission.
         """
         raise NotImplementedError(f"{self.exciton_decay.__name__} is not implemented.")
 
@@ -230,25 +173,20 @@ class Fluorescent(Molecule) :
         self.t1_energy : float = self.seed.gauss(t1_energy, standard_deviation)
         
     def exciton_decay(self) -> bool:
-        """Détruit l'attribut exciton et remet les attributs electron et hole en False.
+        """Méthode représentant la recombinaison d'un exciton, avec ou sans émission.
 
         Returns
         -------
-            Retourne True quand l'exciton est singulet (fluorescence), sinon False.
-
-        Raises
-        ------
-        AttributeError
-            Erreur levée quand la molécule n'a pas d'exciton moléculaire.
+            Si self.exciton != 0, change self.electron et self.hole à False, change self.exciton à 0.
+            Enfin, retourne 1 si self.exciton était singulet car les Fluorescent sont fluorescentes, sinon 0.
         """
-        if self.has_exciton :
-            output : bool = self.exciton.spin
-            del self.exciton
-            self.has_exciton = False
+
+        if self.exciton :
+            state = self.exciton
+            self.exciton = EXCITON["none"]
             self.electron = False
             self.hole = False
-            return output
-        raise AttributeError(f"{self.exciton_decay.__name__} : Exciton attribute doesn't exist.")
+            return 0 if state != EXCITON["singlet"] else 1
 
 
 class TADF(Molecule) :
@@ -329,38 +267,30 @@ class TADF(Molecule) :
         self.t1_energy : float = self.seed.gauss(t1_energy, standard_deviation)
 
     def exciton_decay(self) -> bool:
-        """Détruit l'attribut exciton et remet les attributs electron et hole en False.
+        """Méthode représentant la recombinaison d'un exciton, avec ou sans émission.
 
         Returns
         -------
-            Retourne True quand l'exciton est singulet (fluorescence), sinon False.
-
-        Raises
-        ------
-        AttributeError
-            Erreur levée quand la molécule n'a pas d'exciton moléculaire.
+            Si self.exciton != 0, change self.electron et self.hole à False, change self.exciton à 0.
+            Enfin, retourne 1 si self.exciton était singulet car les TADF sont fluorescentes, sinon 0.
         """
-        if hasattr(self, "exciton") :
-            output : bool = self.exciton.spin
-            del self.exciton
-            self.has_exciton = False
+
+        if self.exciton :
+            state = self.exciton
+            self.exciton = EXCITON["none"]
             self.electron = False
             self.hole = False
-            return output
-        raise AttributeError(f"{self.exciton_decay.__name__} : Exciton attribute doesn't exist.")
+            return 0 if state != EXCITON["singlet"] else 1
         
     def intersystem_crossing(self) -> None :
         """Converti l'état de spin de l'exciton.
 
-        Raises
-        ------
-        AttributeError
-            Erreur levée quand la molécule n'a pas d'exciton moléculaire.
+        Si self.exciton est un sigulet, self.exciton est changé en triplet et vice versa.
         """
-        if self.has_exciton :
-            self.exciton.reverse_spin()
-            return
-        raise AttributeError(f"{self.intersystem_crossing.__name__} : Exciton attribute doesn't exist.")
+        if self.exciton == EXCITON["singlet"] :
+            self.exciton = EXCITON["triplet"]
+        elif self.exciton == EXCITON["triplet"] :
+            self.exciton = EXCITON["singlet"]
 
 
 class Host(Molecule) :
@@ -439,25 +369,19 @@ class Host(Molecule) :
         self.t1_energy : float = self.seed.gauss(t1_energy, standard_deviation)
         
     def exciton_decay(self) -> bool:
-        """Détruit l'attribut exciton et remet les attributs electron et hole en False.
+        """Méthode représentant la recombinaison d'un exciton, avec ou sans émission.
 
         Returns
         -------
-            Retourne False quel que soit l'état de spin car les molécules Hote n'émette pas dans
-            le spectre du visible.
-
-        Raises
-        ------
-        AttributeError
-            Erreur levée quand la molécule n'a pas d'exciton moléculaire.
+            Si self.exciton != 0, change self.electron et self.hole à False, change self.exciton à 0.
+            Enfin, retourne 0 car les Host ne sont pas des molécules émittrice (dans le visible).
         """
-        if self.has_exciton :
-            del self.exciton
-            self.has_exciton = False
+
+        if self.exciton :
+            self.exciton = EXCITON["none"]
             self.electron = False
             self.hole = False
-            return False
-        raise AttributeError(f"{self.exciton_decay.__name__} : Exciton attribute doesn't exist.")
+            return 0
 
 
 @dataclass

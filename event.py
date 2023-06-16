@@ -77,53 +77,45 @@ Binding(Event), initial, final, tau, state
 from dataclasses import dataclass
 
 
+EVENTS : dict[str, int] = {
+    "move" : 1,
+    "ISC" : 2,
+    "decay" : 3,
+    "capture" : 4,
+    "unbound" : 5
+}
 PARTICULES : dict[str, int] = {
-    "electron" : 0,
-    "hole" : 1,
-    "exciton" : 2
+     "electron" : 1,
+     "hole" : 2,
+     "exciton" : 3
 }
 
-CROSSING : dict[str, int] = {
-    "ISC" : 3,
-    "RISC" : 4
-}
-
-RADIATION : dict[str, int] = {
-    "NR" : 5,
-    "fluorescent" : 6
-}
-
-BOUND_STATE : dict[str, int] = {
-    "bound" : 7,
-    "unbound" : 8
-}
 
 def is_electron(value : int) -> bool :
-        return value == PARTICULES["electron"]
+     return value == PARTICULES["electron"]
 
 def is_hole(value : int) -> bool :
-        return value == PARTICULES["hole"]
+     return value == PARTICULES["hole"]
 
 def is_exciton(value : int) -> bool :
-        return value == PARTICULES["exciton"]
+     return value == PARTICULES["exciton"]
 
-def is_ISC(value : int) -> bool :
-        return value == CROSSING["ISC"]
 
-def is_RISC(value : int) -> bool :
-        return value == CROSSING["RISC"]
+def is_move_event(value : int) -> bool :
+    return value == EVENTS["move"]
 
-def is_NR(value : int) -> bool :
-        return value == RADIATION["NR"]
+def is_ISC_event(value : int) -> bool :
+    return value == EVENTS["ISC"]
 
-def is_fluorescent(value : int) -> bool :
-        return value == RADIATION["fluorescent"]
+def is_decay_event(value : int) -> bool :
+     return value == EVENTS["NR"]
 
-def is_bound(value : int) -> bool :
-        return value == BOUND_STATE["bound"]
+def is_capture_event(value : int) -> bool :
+     return value == EVENTS["capture"]
 
-def is_unbound(value : int) -> bool :
-        return value == BOUND_STATE["unbound"]
+def is_unbound_event(value : int) -> bool :
+     return value == EVENTS["unbound"]
+
 
 @dataclass
 class Point :
@@ -145,14 +137,14 @@ class Point :
     z : int
 
     def __add__(self, other) :
-        if isinstance(other, (Point, Vector)) :
+        if issubclass(other, Point) :
             return Vector(self.x + other.x, self.y + other.y, self.z + other.z)
         elif isinstance(other, (float, int)) :
             return Vector(self.x + other, self.y + other, self.z + other)
         raise TypeError(f"other must be of type Vector, float or int, got {type(other)}")
             
     def __sub__(self, other) :
-        if isinstance(other, (Point, Vector)) :
+        if issubclass(other, Point) :
             return Vector(self.x - other.x, self.y - other.y, self.z - other.z)
         elif isinstance(other, (float, int)) :
             return Vector(self.x - other, self.y - other, self.z - other)
@@ -166,7 +158,7 @@ class Vector(Point) :
     z : float
     
     def __mul__(self, other) :
-        if isinstance(other, (Vector, Point)) :
+        if issubclass(other, Point) :
             return self.x * other.x + self.y * other.y + self.z * other.z
         elif isinstance(other, (float, int)) :
             return Vector(self.x * other, self.y * other, self.z * other)
@@ -176,7 +168,7 @@ class Vector(Point) :
         return self * other
 
 
-@dataclass
+@dataclass(eq = False)
 class Event :
     """Dataclasse représentant un événement au sein du réseau.
 
@@ -190,138 +182,49 @@ class Event :
         Position d'arrivée de l'événement.
     tau : float
         Durée de l'événement.
+    kind : int
+        Type d'événement. Les valeurs possibles sont stockées dans le EVENTS.
+    particule : int = 0
+        Type de particule impliquée par l'événement. Les valeurs possible sont stockées dans PARTICULES.
+        La valeur par défaut peut être utilisée pour des événements spéciaux n'impliquant pas de particule.
     """
+
     initial : Point
     final : Point
     tau : float
+    kind : int
+    particule : int = 0
+
+    def __eq__(self, other) -> bool :
+        if isinstance(other, Event) :
+            equality = [
+                self.initial == other.initial,
+                self.final == other.final,
+                self.kind == other.kind,
+                self.particule == other.particule
+            ]
+            return all(equality)
+        raise TypeError(f"other must be of type event, got {type(other)}")
+    
+    def __ne__(self, other : object) -> bool:
+        return not self == other
             
-    def __lt__(self, other) :
+    def __lt__(self, other) -> bool :
         if isinstance(other, Event) :
             return self.tau < other.tau
         raise TypeError(f"other must be of type event, got {type(other)}")
     
-    def __gt__(self, other) :
+    def __gt__(self, other) -> bool :
         if isinstance(other, Event) :
             return self.tau > other.tau
         raise TypeError(f"other must be of type event, got {type(other)}")
 
-    def __le__(self, other) :
+    def __le__(self, other) -> bool :
         if isinstance(other, Event) :
             return self.tau <= other.tau
         raise TypeError(f"other must be of type event, got {type(other)}")
     
-    def __ge__(self, other) :
+    def __ge__(self, other) -> bool :
         if isinstance(other, Event) :
             return self.tau >= other.tau
         raise TypeError(f"other must be of type event, got {type(other)}")
-
-
-@dataclass
-class Move(Event) :
-    """Dataclasse représentant un événement de type déplacement.
-
-    Opération de comparaison implémentée.
-
-    Attributes
-    ----------
-    initial : Point
-        Position de départ de l'événement.
-    final : Point
-        Position d'arrivée de l'événement.
-    tau : float
-        Durée de l'événement.
-    particule : str
-        Type de particule sujette au déplacement. Les types autorisés sont "electron", "hole" et "exciton". \n
-        Ces valeurs sont stockées comme attributs de classe dans la classe Particules.
-    """
-
-    particule : int
-
-
-@dataclass
-class ISC(Event) :
-    """Dataclasse représentant un événement de type conversion intersystème.
-
-    Opération de comparaison implémentée.
-
-    Attributes
-    ----------
-    initial : Point
-        Position de départ de l'événement.
-    final : Point
-        Position d'arrivée de l'événement.
-    tau : float
-        Durée de l'événement.
-    conversion : str
-        Sens de la conversion intersystème. Peut être "direct" (singlet-triplet) ou "reverse" (triplet-singlet). \n
-        Les sens de réaction sont stockée dans la classe Crossing.
-    """
-
-    conversion : int
-
-
-@dataclass
-class Decay(Event) :
-    """Dataclasse représentant un événement de type décroissance.
-
-    Opération de comparaison implémentée.
-
-    Attributes
-    ----------
-    initial : Point
-        Position de départ de l'événement.
-    final : Point
-        Position d'arrivée de l'événement.
-    tau : float
-        Durée de l'événement.
-    radiative : str
-        Type de radiation. Les types de radiations sont "NR" (non radiation), sans émission, \n
-        et "Fluo" (fluorescence), avec émission fluorescente. Les valeurs possibles sont stockées \n
-        dans la classe Radiation.
-    """
-
-    radiation : int
-
-
-@dataclass
-class Capture(Event) :
-    """Dataclasse représentant un événement de type capture électronique.
-
-    Opération de comparaison implémentée.
-
-    Attributes
-    ----------
-    initial : Point
-        Position de départ de l'événement.
-    final : Point
-        Position d'arrivée de l'événement.
-    tau : float
-        Durée de l'événement.
-    particule : str
-        Type de particule sujette au déplacement. Les types autorisés sont "e-" ou "h+" \n
-        Ces valeurs sont stockées comme attributs de classe dans la classe Particules.
-    """
-
-    particule : int
-
-
-@dataclass
-class Binding(Event) :
-    """Classe représentant un événement de type séparation des charges d'un exciton.
-
-    Opération de comparaison implémentée.
-
-    Attributes
-    ----------
-    initial : Point
-        Position de départ de l'événement.
-    final : Point
-        Position d'arrivée de l'événement.
-    tau : float
-        Durée de l'événement.
-    bounding : str
-        Type de particule sujette au déplacement. Les types autorisés sont "electron", "hole" et "exciton". \n
-        Ces valeurs sont stockées comme attributs de classe dans la classe Particules.
-    """
-
-    state : int
