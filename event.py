@@ -75,14 +75,16 @@ Binding(Event), initial, final, tau, state
 """
 
 from dataclasses import dataclass
+from math import sqrt
 
 
 EVENTS : dict[str, int] = {
     "move" : 1,
-    "ISC" : 2,
-    "decay" : 3,
-    "capture" : 4,
-    "unbound" : 5
+    "bound" : 2,
+    "ISC" : 3,
+    "Forster" : 4,
+    "decay" : 5,
+    "unbound" : 6
 }
 PARTICULES : dict[str, int] = {
      "electron" : 1,
@@ -104,17 +106,21 @@ def is_exciton(value : int) -> bool :
 def is_move_event(value : int) -> bool :
     return value == EVENTS["move"]
 
+def is_bound_event(value : int) -> bool :
+     return value == EVENTS["bound"]
+
 def is_ISC_event(value : int) -> bool :
     return value == EVENTS["ISC"]
 
-def is_decay_event(value : int) -> bool :
-     return value == EVENTS["NR"]
+def is_Forster_event(value : int) -> bool :
+    return value == EVENTS["Forster"]
 
-def is_capture_event(value : int) -> bool :
-     return value == EVENTS["capture"]
+def is_decay_event(value : int) -> bool :
+     return value == EVENTS["decay"]
 
 def is_unbound_event(value : int) -> bool :
      return value == EVENTS["unbound"]
+
 
 
 @dataclass
@@ -137,14 +143,14 @@ class Point :
     z : int
 
     def __add__(self, other) :
-        if issubclass(other, Point) :
+        if isinstance(other, Point) :
             return Vector(self.x + other.x, self.y + other.y, self.z + other.z)
         elif isinstance(other, (float, int)) :
             return Vector(self.x + other, self.y + other, self.z + other)
         raise TypeError(f"other must be of type Vector, float or int, got {type(other)}")
             
     def __sub__(self, other) :
-        if issubclass(other, Point) :
+        if isinstance(other, Point) :
             return Vector(self.x - other.x, self.y - other.y, self.z - other.z)
         elif isinstance(other, (float, int)) :
             return Vector(self.x - other, self.y - other, self.z - other)
@@ -158,7 +164,7 @@ class Vector(Point) :
     z : float
     
     def __mul__(self, other) :
-        if issubclass(other, Point) :
+        if isinstance(other, Point) :
             return self.x * other.x + self.y * other.y + self.z * other.z
         elif isinstance(other, (float, int)) :
             return Vector(self.x * other, self.y * other, self.z * other)
@@ -166,6 +172,9 @@ class Vector(Point) :
     
     def __rmul__(self, other) :
         return self * other
+    
+    def norm(self) -> float :
+        return sqrt(self.x**2 + self.y**2 + self.z**2)
 
 
 @dataclass(eq = False)
@@ -197,13 +206,13 @@ class Event :
 
     def __eq__(self, other) -> bool :
         if isinstance(other, Event) :
-            equality = [
-                self.initial == other.initial,
-                self.final == other.final,
-                self.kind == other.kind,
-                self.particule == other.particule
-            ]
-            return all(equality)
+            if self.kind == other.kind and self.particule == other.particule :
+                if self.kind in {EVENTS["move"], EVENTS["Forster"]} :
+                    return self.initial == other.initial or self.final == other.final
+                else :
+                    return self.initial == other.initial == self.final == other.final
+            else :
+                return False
         raise TypeError(f"other must be of type event, got {type(other)}")
     
     def __ne__(self, other : object) -> bool:

@@ -18,6 +18,13 @@ EXCITON : dict[str, int] = {
     "triplet" : 3
 }
 
+ENERGIES : dict[str, str] = {
+    "homo" : "homo_energy",
+    "lumo" : "lumo_energy",
+    "s1" : "s1_energy",
+    "t1" : "t1_energy"
+}
+
 class Molecule :
     """Classe représentant une Molécule organique générique.
 
@@ -50,7 +57,7 @@ class Molecule :
     """
 
     def __init__(self, position : Point,
-                 voisins : list[Point]) :
+                 neighbours : list[Point]) :
         """Initialise l'instance de Molecule.
 
         Parameters
@@ -61,11 +68,15 @@ class Molecule :
             Liste des positions des voisins proches de la molécule.
         """
         self.position : Point = position
-        self.neighbors : list[Point] = voisins
+        self.neighbourhood : list[Point] = neighbours
         self.electron : bool = False
         self.hole : bool = False
         self.exciton : int = 0
         self.seed : Random = Random()
+    
+    def empty(self) -> bool :
+        particules = [self.electron, self.hole, self.exciton]
+        return not any(particules)
     
     def switch_electron(self) -> None :
         """Renverse l'état de l'attribut electron.
@@ -186,7 +197,7 @@ class Fluorescent(Molecule) :
             self.exciton = EXCITON["none"]
             self.electron = False
             self.hole = False
-            return 0 if state != EXCITON["singlet"] else 1
+            return state == EXCITON["singlet"]
 
 
 class TADF(Molecule) :
@@ -280,7 +291,7 @@ class TADF(Molecule) :
             self.exciton = EXCITON["none"]
             self.electron = False
             self.hole = False
-            return 0 if state != EXCITON["singlet"] else 1
+            return state == EXCITON["singlet"]
         
     def intersystem_crossing(self) -> None :
         """Converti l'état de spin de l'exciton.
@@ -381,7 +392,7 @@ class Host(Molecule) :
             self.exciton = EXCITON["none"]
             self.electron = False
             self.hole = False
-            return 0
+            return False
 
 
 @dataclass
