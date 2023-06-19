@@ -16,7 +16,7 @@ from event import *
 from molecule import *
 import constants as cst
 
-from math import exp, log
+from math import exp, log, prod
 import matplotlib.pyplot as plt
 from matplotlib import use
 from random import Random
@@ -118,6 +118,7 @@ class Lattice :
         self._recombinations : int = 0
         self._emission : int = 0
         self._IQE : float = 0.
+        self._step : int = 0
         self.time : float = 0.
 
     def _lattice_parameters_creation(self, dimension : tuple[int,int,int], proportions : tuple[float,float,float],
@@ -131,6 +132,9 @@ class Lattice :
         if sum(proportions) != 1. :
             norm = sum(dimension)
             proportions = (dimension[0] / norm, dimension[1] / norm, dimension[2] / norm)
+        if  min(proportions) * prod(dimension) < 1 :
+            minimum = 1 / min(proportions)
+            raise ValueError(f"Not enough molecules for current proportions. Expected at least {minimum}, got {prod(dimension)}")
         self._dimension : Point = Point(*dimension)
         self._proportions : Proportion = Proportion(*proportions)
         self._electric_field : Vector = Vector(0, 0, electric_field)    # [eV/nm]
@@ -154,7 +158,7 @@ class Lattice :
             k = n_host + n_tadf + n_fluo,
             counts = [n_host, n_tadf, n_fluo]
         )
-        assert len(sub_grid) != sub_grid_size, f"Size of sub_grid ({len(sub_grid)}) and x_max*y_max*sub_z_max ({sub_grid_size}) must match !"
+        assert len(sub_grid) == sub_grid_size, f"Size of sub_grid ({len(sub_grid)}) and x_max*y_max*sub_z_max ({sub_grid_size}) must match !"
         grid : list[list[list[int]]] = [[[0 for x in range(x_max)] for y in range(y_max)]]
         grid.extend([[sub_grid[y * x_max : (y+1) * x_max] for y in range(y_max)] for z in range(sub_z_max)])
         grid.extend([[[0 for x in range(x_max)] for y in range(y_max)]])
@@ -222,8 +226,8 @@ class Lattice :
         self._move_exciton_events : list[Event] = []
         self._decay_events : list[Event] = []
         self._isc_events : list[Event] = []
-        self._bound_events : list[Event] = []
-        self._unbound_events : list[Event] = []
+        self._binding_events : list[Event] = []
+        self._capture_events : list[Event] = []
 
     def _init_move_electron_events(self) -> list[Event] :
         molecules = (
@@ -244,7 +248,7 @@ class Lattice :
             for position in self._holes_locations
         )
         events = (
-            Event(molecule.position, neighbour, self._time_move_hole(molecule.position, neighbour), EVENTS["move"], PARTICULES["electron"])
+            Event(molecule.position, neighbour, self._time_move_hole(molecule.position, neighbour), EVENTS["move"], PARTICULES["hole"])
             for molecule in molecules
             for neighbour in molecule.neighbourhood
             if neighbour not in self._holes_locations
@@ -338,10 +342,13 @@ class Lattice :
                 break
 
     def _remove_bound_event(self, event : Event) -> None :
-        self._bound_events.remove(event)
+        self._binding_events.remove(event)
 
     def _remove_decay_event(self, event : Event) -> None :
         self._decay_events.remove(event)
+
+    def _remove_capture_event(self, event : Event) -> None :
+        self._capture_events.remove(event)
 
 
 
@@ -368,11 +375,19 @@ class Lattice :
 
     def _new_bound_event(self, position : Point) -> None :
         event = Event(position, position, 0., EVENTS["bound"], PARTICULES["exciton"])
-        self._bound_events.append(event)
+        self._binding_events.append(event)
 
     def _new_decay_event(self, position : Point) -> None :
         event = Event(position, position, 0., EVENTS["decay"], PARTICULES["exciton"])
         self._decay_events.append(event)
+
+    def _new_capture_electron_event(self, position : Point) -> None :
+        event = Event(position, position, 0., EVENTS["capture"], PARTICULES["electron"])
+        self._capture_events.append(event)
+
+    def _new_capture_hole_event(self, position : Point) -> None :
+        event = Event(position, position, 0., EVENTS["capture"], PARTICULES["hole"])
+        self._capture_events.append(event)
 
 
 
@@ -380,7 +395,6 @@ class Lattice :
     ####____Méthodes de transformation du réseau____####
     ####################################################
     def _move_electron(self, initial : Point, final : Point) -> None :
-        print(initial)
         self._grid[initial.z][initial.y][initial.x].switch_electron()
         self._grid[final.z][final.y][final.x].switch_electron()
         self._electrons_locations.remove(initial)
@@ -445,7 +459,6 @@ class Lattice :
         events.sort(reverse = True)
         try : event = events.pop()
         except IndexError : return False
-        print(event)
         #   Traite les événements de type "move"
         if event.kind == EVENTS["move"] :
             #   Traite le cas d'un électron
@@ -453,7 +466,7 @@ class Lattice :
                 self._remove_move_electron_events(event)
                 self._move_electron(event.initial, event.final)
                 molecule = self._get_molecule(event.final)
-                if not molecule.hole :
+                if not molecule.hole and event.final.z != 0 :
                     self._update_events(event.tau)
                     self._new_move_electron_events(event.final)
                 elif molecule.hole :
@@ -463,15 +476,13 @@ class Lattice :
                     self._new_bound_event(event.final)
                 elif event.final.z == 0 :
                     self._update_events(event.tau)
-                    self._capture_electron(event.final)
-                    self._electron_reinjection()
-                    self._new_move_electron_events(self._electrons_locations[-1])
+                    self._new_capture_electron_event(event.final)
             #   Traite le cas d'un trou
             elif event.particule == PARTICULES["hole"] :
                 self._remove_move_hole_events(event)
                 self._move_hole(event.initial, event.final)
                 molecule = self._get_molecule(event.final)
-                if not molecule.electron :
+                if not molecule.electron and event.final.z != (self._dimension.z - 1) :
                     self._update_events(event.tau)
                     self._new_move_hole_events(event.final)
                 elif molecule.electron :
@@ -481,9 +492,7 @@ class Lattice :
                     self._new_bound_event(event.final)
                 elif event.final.z == (self._dimension.z - 1) :
                     self._update_events(event.tau)
-                    self._capture_hole(event.final)
-                    self._hole_reinjection()
-                    self._new_move_hole_events(self._holes_locations[-1])
+                    self._new_capture_hole_event(event.final)
             #   Traite le cas d'un exciton (non implémenté)
             elif event.particule == PARTICULES["exciton"] :
                 ...
@@ -510,6 +519,17 @@ class Lattice :
         #   Traite les événements de type séparation d'exciton :
         elif event.kind == EVENTS["unbound"] :
             ...
+        elif event.kind == EVENTS["capture"] :
+            if event.particule == PARTICULES["electron"] :
+                self._remove_capture_event(event)
+                self._capture_electron(event.final)
+                self._electron_reinjection()
+                self._new_move_electron_events(self._electrons_locations[-1])
+            elif event.particule == PARTICULES["hole"] :
+                self._remove_capture_event(event)
+                self._capture_hole(event.final)
+                self._hole_reinjection()
+                self._new_move_hole_events(self._holes_locations[-1])
         return True
     
     def _update_events(self, time : float) -> None :
@@ -519,20 +539,21 @@ class Lattice :
             event.tau -= time
         for event in self._move_exciton_events :
             event.tau -= time
-        for event in self._bound_events :
+        for event in self._binding_events :
             event.tau -= time
         for event in self._decay_events :
             event.tau -= time
         for event in self._isc_events :
             event.tau -= time
-        for event in self._unbound_events :
+        for event in self._capture_events :
             event.tau -= time
 
     def operations(self, stop : int, start : int = 0) -> None :
         for i in range(start, stop) :
             #   Affiche l'étape régulièrement
-            if not i%1000 :
-                print (f"Step {i}")
+            if not self._step%1000 :
+                print (f"Step {self._step}")
+            self._step += 1
             time = self.time
             #   Exécute l'évenement suivant et s'assure que le temps n'a pas diminué.
             if self._first_reaction_method() :
@@ -544,9 +565,6 @@ class Lattice :
         #   Mets à jour l'efficacité quantique interne
         if self._recombinations > 0 :
             self._IQE = 100. * float(self._emission)/float(self._recombinations)
-            return
-        else :
-            return
     
 
 
@@ -562,7 +580,7 @@ class Lattice :
     def _get_all_events(self) -> list[Event] :
         output : list[Event] = self._move_electron_events + self._move_hole_events \
         + self._move_exciton_events + self._isc_events + self._decay_events \
-        + self._bound_events + self._unbound_events
+        + self._binding_events + self._capture_events
         return output
     
 
@@ -574,76 +592,6 @@ class Lattice :
         use("Agg")
         plt.figure(dpi=100)
         axes = plt.axes(projection = "3d")
-
-        color = "b"
-        electron_host = [
-            position
-            for position in self._electrons_locations
-            if self._get_molecule_type(position) is Host
-        ]
-        if len(electron_host) > 0 :
-            marker_style = "o"
-            x = [position.x for position in electron_host]
-            y = [position.y for position in electron_host]
-            z = [position.z for position in electron_host]
-            axes.scatter(x, y, z, c = color, marker = marker_style)
-        electron_tadf = [
-            position
-            for position in self._electrons_locations
-            if self._get_molecule_type(position) is TADF
-        ]
-        if len(electron_tadf) > 0 :
-            marker_style = "s"
-            x = [position.x for position in electron_tadf]
-            y = [position.y for position in electron_tadf]
-            z = [position.z for position in electron_tadf]
-            axes.scatter(x, y, z, c = color, marker = marker_style)
-        electron_fluorescent = [
-            position
-            for position in self._electrons_locations
-            if self._get_molecule_type(position) is Fluorescent
-        ]
-        if len(electron_fluorescent) > 0 :
-            marker_style = "^"
-            x = [position.x for position in electron_fluorescent]
-            y = [position.y for position in electron_fluorescent]
-            z = [position.z for position in electron_fluorescent]
-            axes.scatter(x, y, z, c = color, marker = marker_style)
-
-        color = "r"
-        hole_host = [
-            position
-            for position in self._holes_locations
-            if self._get_molecule_type(position) is Host
-        ]
-        if len(hole_host) > 0 :
-            marker_style = "o"
-            x = [position.x for position in hole_host]
-            y = [position.y for position in hole_host]
-            z = [position.z for position in hole_host]
-            axes.scatter(x, y, z, c = color, marker = marker_style)
-        hole_tadf = [
-            position
-            for position in self._holes_locations
-            if self._get_molecule_type(position) is TADF
-        ]
-        if len(hole_tadf) > 0 :
-            marker_style = "s"
-            x = [position.x for position in hole_host]
-            y = [position.y for position in hole_host]
-            z = [position.z for position in hole_host]
-            axes.scatter(x, y, z, c = color, marker = marker_style)
-        hole_fluorescent = [
-            position
-            for position in self._holes_locations
-            if self._get_molecule_type(position) is Fluorescent
-        ]
-        if len(hole_fluorescent) > 0 :
-            marker_style = "^"
-            x = [position.x for position in hole_host]
-            y = [position.y for position in hole_host]
-            z = [position.z for position in hole_host]
-            axes.scatter(x, y, z, c = color, marker = marker_style)
 
         x_grid = [0, self._dimension.x - 1]
         y_grid = [0, self._dimension.y - 1]
@@ -657,6 +605,111 @@ class Lattice :
             for z in z_grid :
                 axes.plot(x_grid, [y,y], [z,z], linestyle = "solid", color = "k")
 
+        color = "b"
+        electron_host = [
+            position
+            for position in self._electrons_locations
+            if self._get_molecule_type(position) is Host
+        ]
+        if len(electron_host) > 0 :
+            marker_style = "o"
+            x = [position.x for position in electron_host]
+            y = [position.y for position in electron_host]
+            z = [position.z for position in electron_host]
+            axes.scatter(x, y, z, s = 100, c = color, marker = marker_style)
+        electron_tadf = [
+            position
+            for position in self._electrons_locations
+            if self._get_molecule_type(position) is TADF
+        ]
+        if len(electron_tadf) > 0 :
+            marker_style = "s"
+            x = [position.x for position in electron_tadf]
+            y = [position.y for position in electron_tadf]
+            z = [position.z for position in electron_tadf]
+            axes.scatter(x, y, z, s = 100, c = color, marker = marker_style)
+        electron_fluorescent = [
+            position
+            for position in self._electrons_locations
+            if self._get_molecule_type(position) is Fluorescent
+        ]
+        if len(electron_fluorescent) > 0 :
+            marker_style = "^"
+            x = [position.x for position in electron_fluorescent]
+            y = [position.y for position in electron_fluorescent]
+            z = [position.z for position in electron_fluorescent]
+            axes.scatter(x, y, z, s = 75, c = color, marker = marker_style)
+
+        color = "r"
+        hole_host = [
+            position
+            for position in self._holes_locations
+            if self._get_molecule_type(position) is Host
+        ]
+        if len(hole_host) > 0 :
+            marker_style = "o"
+            x = [position.x for position in hole_host]
+            y = [position.y for position in hole_host]
+            z = [position.z for position in hole_host]
+            axes.scatter(x, y, z, s = 100, c = color, marker = marker_style)
+        hole_tadf = [
+            position
+            for position in self._holes_locations
+            if self._get_molecule_type(position) is TADF
+        ]
+        if len(hole_tadf) > 0 :
+            marker_style = "s"
+            x = [position.x for position in hole_tadf]
+            y = [position.y for position in hole_tadf]
+            z = [position.z for position in hole_tadf]
+            axes.scatter(x, y, z, s = 100, c = color, marker = marker_style)
+        hole_fluorescent = [
+            position
+            for position in self._holes_locations
+            if self._get_molecule_type(position) is Fluorescent
+        ]
+        if len(hole_fluorescent) > 0 :
+            marker_style = "^"
+            x = [position.x for position in hole_fluorescent]
+            y = [position.y for position in hole_fluorescent]
+            z = [position.z for position in hole_fluorescent]
+            axes.scatter(x, y, z, s = 100, c = color, marker = marker_style)
+
+        color = "m"
+        exciton_host = [
+            position
+            for position in self._excitons_locations
+            if self._get_molecule_type(position) is Host
+        ]
+        if len(exciton_host) > 0 :
+            marker_style = "o"
+            x = [position.x for position in exciton_host]
+            y = [position.y for position in exciton_host]
+            z = [position.z for position in exciton_host]
+            axes.scatter(x, y, z, s = 100, c = color, marker = marker_style)
+        exciton_tadf = [
+            position
+            for position in self._excitons_locations
+            if self._get_molecule_type(position) is TADF
+        ]
+        if len(exciton_tadf) > 0 :
+            marker_style = "s"
+            x = [position.x for position in exciton_tadf]
+            y = [position.y for position in exciton_tadf]
+            z = [position.z for position in exciton_tadf]
+            axes.scatter(x, y, z, s = 100, c = color, marker = marker_style)
+        exciton_fluorescent = [
+            position
+            for position in self._excitons_locations
+            if self._get_molecule_type(position) is Fluorescent
+        ]
+        if len(exciton_fluorescent) > 0 :
+            marker_style = "^"
+            x = [position.x for position in exciton_fluorescent]
+            y = [position.y for position in exciton_fluorescent]
+            z = [position.z for position in exciton_fluorescent]
+            axes.scatter(x, y, z, s = 100, c = color, marker = marker_style)
+
         axes.set_xlabel("x", size = 16)
         axes.set_ylabel("y", size = 16)
         axes.set_zlabel("z", size = 16)
@@ -668,10 +721,12 @@ class Lattice :
         plt.close()
         return
 
-test = Lattice((3,3,3), (0.84, 0.15, 0.1), charges = 3)
-test.plot()
-print(*test._electrons_locations)
-print(*test._holes_locations)
-for i in range(10) :
+from time import time
+start = time()
+test = Lattice((10,10,10), (0.84, 0.15, 0.01), charges = 1)
+op = 10**6
+for i in range(100) :
     test.operations(1)
-    test.plot(f"{i}")
+print(test._IQE)
+end = time()
+print(f"{end - start} s")
