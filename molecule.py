@@ -1,100 +1,413 @@
 #########################################################################################################
 #
 #   author(s) : Théo Piron
-#   last update : 11/05/2022 (dd/mm/yyyy)
+#   last update : 01/06/2023 (dd/mm/yyyy)
 #   python version : 3.10.4
 #   modules : reaseau, molecule, event, mu
 #
 #
 #########################################################################################################
+from event import Point
+from random import Random
+from dataclasses import dataclass
 
-from numpy.random import default_rng, Generator
-from event import point
+EXCITON : dict[str, int] = {
+    "none" : 0,
+    "singlet" : 1,
+    "doublet" : 2,
+    "triplet" : 3
+}
 
-# Classe de type exciton utilisée par les molécules pour signaler la présence d'un exciton
-class exciton :
-    def __init__(self) :
-        self.RNG = default_rng()
-        self.spin = self._spin()    # spin de l'exciton
+ENERGIES : dict[str, str] = {
+    "homo" : "homo_energy",
+    "lumo" : "lumo_energy",
+    "s1" : "s1_energy",
+    "t1" : "t1_energy"
+}
 
-    # Choisi le spin de l'exciton : True pour singulet et False pour triplet
-    def _spin(self) -> bool :
-        random = self.RNG.uniform(0,100)
-        if random < 25 :
-            return True
-        else :
-            return False
-# Classe de type energy utilisée pour stocker les niveaux d'énergie associé à chaque molécule
-class energy :
-    def __init__(self, HOMO : float, LUMO : float, S1: float, T1 : float) :
-        self.HOMO = HOMO
-        self.LUMO = LUMO
-        self.S1 = S1
-        self.T1 = T1
-# Classe de type molecule, mère des classes fluorescent, tadf et host
-class molecule :
-    def __init__(self, position : point, voisins : list[point]) :
-        self.RNG = default_rng()    # Seed de la molécule
-        self.POS = position # Position de la molécule dans le réseau
-        self.VOISINS = voisins
-        self.electron = False   # Electron excité dans la LUMO
-        self.hole = False   # Trou dans la HOMO
-        self.exciton = None # Exciton (electron + trou)
-        self.HOMO = None  # Energie de la HOMO (dépend du type de molécule)
-        self.LUMO = None  # Energie de la LUMO (dépend du type de molécule)
-        self.S1 = None  # Energie de l'état singulet (dépend du type de molécule)
-        self.T1 = None  # Energie de l'état triplet (dépend du type de molécule)
+class Molecule :
+    """Classe représentant une Molécule organique générique.
+
+    Attributes
+    ----------
+    position : Point
+        Position de la molécule dans le réseau.
+    neighbors : list[Point]
+        Liste des positions des voisins proches de la molécule.
+    electron : bool
+        Présence d'un électron dans la molécule.
+    hole : bool
+        Présence d'un trou dans la molécule.
+    has_exciton : bool
+        Présence d'un exciton dans la molécule. Plus consistant avec electron et hole.
+        Joue le rôle de hasattr().
+    seed : Generator
+        Graine de nombres pseudo-aléatoires propre à l'instance de la molécule.
+
+    Methods
+    ------- 
+    switch_electron() -> None
+        Renverse l'état de l'attribut electron.
+    switch_electron() -> None
+        Renverse l'état de l'attribut hole.
+    generate_exciton(random_number : int) -> None
+        Génère un exciton.
+    exciton_decay() -> bool
+        NotImplemented.
+    """
+
+    def __init__(self, position : Point,
+                 neighbours : list[Point]) :
+        """Initialise l'instance de Molecule.
+
+        Parameters
+        ----------
+        position : Point
+            Position de la molécule dans le réseau.
+        voisins : list[Point]
+            Liste des positions des voisins proches de la molécule.
+        """
+        self.position : Point = position
+        self.neighbourhood : list[Point] = neighbours
+        self.electron : bool = False
+        self.hole : bool = False
+        self.exciton : int = 0
+        self.seed : Random = Random()
     
-    def _electron(self) :
+    def empty(self) -> bool :
+        particules = [self.electron, self.hole, self.exciton]
+        return not any(particules)
+    
+    def switch_electron(self) -> None :
+        """Renverse l'état de l'attribut electron.
+        """
         self.electron = not self.electron
 
-    def _hole(self) :
+    def switch_hole(self) -> None :
+        """Renverse l'état de l'attribut hole.
+        """
         self.hole = not self.hole
 
-    def _exciton(self) :
+    def generate_exciton(self) -> None :       
+        """Génère l'attribut exciton si les attributs electron et hole sont True.
+        """
         if self.electron and self.hole :
-            self.exciton = exciton()
+            random = self.seed.random()
+            if 0 <= random < 0.25 :
+                self.exciton = EXCITON["singlet"]
+            else :
+                self.exciton = EXCITON["triplet"]
 
-    def _decay(self) :
-        self.exciton = None
-        self.electron = False
-        self.hole = False
-# Classe de type flourescent qui hérite des méthodes et des attribus de molecule. Utilisée dans le réseau.
-class fluorescent(molecule) :
-    def __init__(self, position : point, voisins : list[point], sigma : float = 0.1) :
+    def unbound_exciton(self) -> None :
+        if self.exciton :
+            self.exciton = EXCITON["none"]
+
+    def exciton_decay(self) -> bool :
+        """Méthode représentant la recombinaison d'un exciton, avec ou sans émission.
+        """
+        raise NotImplementedError(f"{self.exciton_decay.__name__} is not implemented.")
+
+
+class Fluorescent(Molecule) :
+    """Classe représentant une molécule fluorescente S1. Hérite de la classe Molecule.
+
+    L'instance par défaut correspond à une molécume fluorescente bleue TBPe.
+
+    Attributes
+    ----------
+    position : Point
+        Position de la molécule.
+    neighbors : list[Point]
+        Liste des positions des voisins proches de la molécule.
+    electron : bool
+        Présence d'un électron dans la molécule.
+    hole : bool
+        Présence d'un trou dans la molécule.
+    has_exciton : bool
+        Présence d'un exciton dans la molécule. Plus consistant avec electron et hole.
+        Joue le rôle de hasattr().
+    seed : Generator
+        Graine de nombres pseudo-aléatoires propre à l'instance de la molécule.
+    homo_energy : float
+        Energie de l'orbitale moléculaire occupée la plus haute générée aléatoirement selon
+        une distrubition gaussienne dont la moyenne est l'argument éponyme.
+    lumo_energy : float
+        Energie de l'orbitale moléculaire inoccupée la plus basse générée aléatoirement selon
+        une distrubition gaussienne dont la moyenne est l'argument éponyme.
+    s1_energy : float
+        Energie d'un exciton S1 au sein de la molécule générée aléatoirement selon
+        une distrubition gaussienne dont la moyenne est l'argument éponyme.
+    t1_energy : float
+        Energie d'un exciton T1 au sein de la molécule générée aléatoirement selon
+        une distrubition gaussienne dont la moyenne est l'argument éponyme.
+
+    Methods
+    -------
+    switch_electron() -> None
+        Renverse l'état de l'attribut electron.
+    switch_electron() -> None
+        Renverse l'état de l'attribut hole.
+    generate_electron(random_number : int) -> None
+        Génère l'attribut exciton.
+    exciton_decay() -> bool
+        Décompose l'exciton. Remet les attributs electron et hole en False et supprime l'attribut
+        exciton. Retourne True si l'exciton est singulet (émetteur fluorescent), False sinon.
+    """
+
+    def __init__(self, position : Point,
+                 voisins : list[Point], homo_energy : float = -5.3,
+                 lumo_energy : float = -2.7, s1_energy : float = 2.69,
+                 t1_energy : float = 1.43, standard_deviation : float = 0.1) -> None :
+        """Initialise l'instance de la classe Fluorescent.
+        
+        Parameters
+        ----------
+        position : Point
+            Position de la molécule dans le réseau.
+        voisins : list[Point]
+            Liste des positions des voisins proches de la molécule.
+        homo_energy : float = -5.3 (5.25)
+            Energie moyenne de l'orbitale moléculaire occupée la plus haute.
+        lumo_energy : float = -2.7 (1.84)
+            Energie moyenne de l'orbitale moléculaire inoccupée la plus basse.
+        s1_energy : float = 2.69
+            Energie moyenne du niveau d'énergie S1.
+        t1_energy : float = 1.43
+            Energie moyenne du niveau d'énergie T1.
+        standard_deviation : float = 0.1
+            Deviation standard des niveaux d'énergie.
+        """
         super().__init__(position, voisins)
-        self.mu = energy(-5.3, -2.7, 2.69, 1.43)  # Moyenne pour le distribution gaussienne ! non implémenté
-        self.sigma = sigma   # Déviation standard pour le distribution gaussienne ! non implémenté
-        self._energie()
+        self.homo_energy : float = self.seed.gauss(homo_energy, standard_deviation)
+        self.lumo_energy : float = self.seed.gauss(lumo_energy, standard_deviation)
+        self.s1_energy : float = self.seed.gauss(s1_energy, standard_deviation)
+        self.t1_energy : float = self.seed.gauss(t1_energy, standard_deviation)
+        
+    def exciton_decay(self) -> bool:
+        """Méthode représentant la recombinaison d'un exciton, avec ou sans émission.
 
-    def _energie(self) :
-        self.HOMO = self.RNG.normal(self.mu.HOMO, self.sigma)
-        self.LUMO = self.RNG.normal(self.mu.LUMO, self.sigma)
-        self.S1 = self.RNG.normal(self.mu.S1, self.sigma)
-        self.T1 = self.RNG.normal(self.mu.T1, self.sigma)
-# Classe de type tadf qui hérite des méthodes et des attribus de molecule. Utilisée dans le réseau.
-class tadf(molecule) :
-    def __init__(self, position : point, voisins : list[point], sigma : float = 0.1) :
+        Returns
+        -------
+            Si self.exciton != 0, change self.electron et self.hole à False, change self.exciton à 0.
+            Enfin, retourne 1 si self.exciton était singulet car les Fluorescent sont fluorescentes, sinon 0.
+        """
+
+        if self.exciton :
+            state = self.exciton
+            self.exciton = EXCITON["none"]
+            self.electron = False
+            self.hole = False
+            return state == EXCITON["singlet"]
+
+
+class TADF(Molecule) :
+    """Classe représentant une molécule TADF S1. Hérite de la classe Molecule.
+
+    L'instance par défaut correspond à une molécume fluorescente bleue ACRSA.
+
+    Attributes
+    ----------
+    position : Point
+        Position de la molécule.
+    neighbors : list[Point]
+        Liste des positions des voisins proches de la molécule.
+    electron : bool
+        Présence d'un électron dans la molécule.
+    hole : bool
+        Présence d'un trou dans la molécule.
+    has_exciton : bool
+        Présence d'un exciton dans la molécule. Plus consistant avec electron et hole.
+        Joue le rôle de hasattr().
+    seed : Generator
+        Graine de nombres pseudo-aléatoires propre à l'instance de la molécule.
+    homo_energy : float
+        Energie de l'orbitale moléculaire occupée la plus haute générée aléatoirement selon
+        une distrubition gaussienne dont la moyenne est l'argument éponyme.
+    lumo_energy : float
+        Energie de l'orbitale moléculaire inoccupée la plus basse générée aléatoirement selon
+        une distrubition gaussienne dont la moyenne est l'argument éponyme.
+    s1_energy : float
+        Energie d'un exciton S1 au sein de la molécule générée aléatoirement selon
+        une distrubition gaussienne dont la moyenne est l'argument éponyme.
+    t1_energy : float
+        Energie d'un exciton T1 au sein de la molécule générée aléatoirement selon
+        une distrubition gaussienne dont la moyenne est l'argument éponyme.
+
+    Methods
+    -------
+    switch_electron() -> None
+        Renverse l'état de l'attribut electron.
+    switch_electron() -> None
+        Renverse l'état de l'attribut hole.
+    generate_electron(random_number : int) -> None
+        Génère l'attribut exciton.
+    exciton_decay() -> bool
+        Décompose l'exciton. Remet les attributs electron et hole en False et supprime l'attribut
+        exciton. Retourne True si l'exciton est singulet (émetteur fluorescent), False sinon.
+    intersystem_crossing() -> None
+        Converti le spin de l'exciton.
+    """
+
+    def __init__(self, position : Point,
+                 voisins : list[Point], homo_energy : float = -5.8,
+                 lumo_energy : float = -2.6, s1_energy : float = 2.55,
+                 t1_energy : float = 2.52, standard_deviation : float = 0.1) -> None :
+        """Initialise l'instance de la classe TADF.
+        
+        Parameters
+        ----------
+        position : Point
+            Position de la molécule dans le réseau.
+        voisins : list[Point]
+            Liste des positions des voisins proches de la molécule.
+        homo_energy : float = -5.8
+            Energie moyenne de l'orbitale moléculaire occupée la plus haute.
+        lumo_energy : float = -2.6
+            Energie moyenne de l'orbitale moléculaire inoccupée la plus basse.
+        s1_energy : float = 2.55
+            Energie moyenne du niveau d'énergie S1.
+        t1_energy : float = 2.52
+            Energie moyenne du niveau d'énergie T1.
+        standard_deviation : float = 0.1
+            Deviation standard des niveaux d'énergie.
+        """
         super().__init__(position, voisins)
-        self.mu = energy(-5.8, -2.6, 2.55, 2.52)  # Moyenne pour le distribution gaussienne ! non implémenté
-        self.sigma = sigma   # Déviation standard pour le distribution gaussienne ! non implémenté
-        self._energie()
+        self.homo_energy : float = self.seed.gauss(homo_energy, standard_deviation)
+        self.lumo_energy : float = self.seed.gauss(lumo_energy, standard_deviation)
+        self.s1_energy : float = self.seed.gauss(s1_energy, standard_deviation)
+        self.t1_energy : float = self.seed.gauss(t1_energy, standard_deviation)
 
-    def _energie(self) :
-        self.HOMO = self.RNG.normal(self.mu.HOMO, self.sigma)
-        self.LUMO = self.RNG.normal(self.mu.LUMO, self.sigma)
-        self.S1 = self.RNG.normal(self.mu.S1, self.sigma)
-        self.T1 = self.RNG.normal(self.mu.T1, self.sigma)
-# Classe de type host qui hérite des méthodes et des attribus de molecule. Utilisée dans le réseau.
-class host(molecule) :
-    def __init__(self, position : point, voisins : list[point], sigma : float = 0.1) :
+    def exciton_decay(self) -> bool:
+        """Méthode représentant la recombinaison d'un exciton, avec ou sans émission.
+
+        Returns
+        -------
+            Si self.exciton != 0, change self.electron et self.hole à False, change self.exciton à 0.
+            Enfin, retourne 1 si self.exciton était singulet car les TADF sont fluorescentes, sinon 0.
+        """
+
+        if self.exciton :
+            state = self.exciton
+            self.exciton = EXCITON["none"]
+            self.electron = False
+            self.hole = False
+            return state == EXCITON["singlet"]
+        
+    def intersystem_crossing(self) -> None :
+        """Converti l'état de spin de l'exciton.
+
+        Si self.exciton est un sigulet, self.exciton est changé en triplet et vice versa.
+        """
+        if self.exciton == EXCITON["singlet"] :
+            self.exciton = EXCITON["triplet"]
+        elif self.exciton == EXCITON["triplet"] :
+            self.exciton = EXCITON["singlet"]
+
+
+class Host(Molecule) :
+    """Classe représentant une molécule Hote. Hérite de la classe Molecule.
+
+    L'instance par défaut correspond à une molécume fluorescente bleue DPEPO.
+
+    Attributes
+    ----------
+    position : Point
+        Position de la molécule.
+    neighbors : list[Point]
+        Liste des positions des voisins proches de la molécule.
+    electron : bool
+        Présence d'un électron dans la molécule.
+    hole : bool
+        Présence d'un trou dans la molécule.
+    has_exciton : bool
+        Présence d'un exciton dans la molécule. Plus consistant avec electron et hole.
+        Joue le rôle de hasattr().
+    seed : Generator
+        Graine de nombres pseudo-aléatoires propre à l'instance de la molécule.
+    homo_energy : float
+        Energie de l'orbitale moléculaire occupée la plus haute générée aléatoirement selon
+        une distrubition gaussienne dont la moyenne est l'argument éponyme.
+    lumo_energy : float
+        Energie de l'orbitale moléculaire inoccupée la plus basse générée aléatoirement selon
+        une distrubition gaussienne dont la moyenne est l'argument éponyme.
+    s1_energy : float
+        Energie d'un exciton S1 au sein de la molécule générée aléatoirement selon
+        une distrubition gaussienne dont la moyenne est l'argument éponyme.
+    t1_energy : float
+        Energie d'un exciton T1 au sein de la molécule générée aléatoirement selon
+        une distrubition gaussienne dont la moyenne est l'argument éponyme.
+
+    Methods
+    -------
+    switch_electron() -> None
+        Renverse l'état de l'attribut electron.
+    switch_electron() -> None
+        Renverse l'état de l'attribut hole.
+    generate_electron(random_number : int) -> None
+        Génère l'attribut exciton.
+    exciton_decay() -> bool
+        Décompose l'exciton. Remet les attributs electron et hole en False et supprime l'attribut
+        exciton. Retourne True si l'exciton est singulet (émetteur fluorescent), False sinon.
+    """
+
+    def __init__(self, position : Point,
+                 voisins : list[Point], homo_energy : float = -6.0,
+                 lumo_energy : float = -2.0, s1_energy : float = 3.50,
+                 t1_energy : float = 3.00, standard_deviation : float = 0.1) -> None :
+        """Initialise l'instance de la classe TADF.
+        
+        Parameters
+        ----------
+        position : Point
+            Position de la molécule dans le réseau.
+        voisins : list[Point]
+            Liste des positions des voisins proches de la molécule.
+        homo_energy : float = -6.0
+            Energie moyenne de l'orbitale moléculaire occupée la plus haute.
+        lumo_energy : float = -2.0
+            Energie moyenne de l'orbitale moléculaire inoccupée la plus basse.
+        s1_energy : float = 3.50
+            Energie moyenne du niveau d'énergie S1.
+        t1_energy : float = 3.00
+            Energie moyenne du niveau d'énergie T1.
+        standard_deviation : float = 0.1
+            Deviation standard des niveaux d'énergie.
+        """
         super().__init__(position, voisins)
-        self.mu = energy(-6.0, -2.0, 3.50, 3.00)  # Moyenne pour le distribution gaussienne ! non implémenté
-        self.sigma = sigma   # Déviation standard pour le distribution gaussienne ! non implémenté
-        self._energie()
+        self.homo_energy : float = self.seed.gauss(homo_energy, standard_deviation)
+        self.lumo_energy : float = self.seed.gauss(lumo_energy, standard_deviation)
+        self.s1_energy : float = self.seed.gauss(s1_energy, standard_deviation)
+        self.t1_energy : float = self.seed.gauss(t1_energy, standard_deviation)
+        
+    def exciton_decay(self) -> bool:
+        """Méthode représentant la recombinaison d'un exciton, avec ou sans émission.
 
-    def _energie(self) :
-        self.HOMO = self.RNG.normal(self.mu.HOMO, self.sigma)
-        self.LUMO = self.RNG.normal(self.mu.LUMO, self.sigma)
-        self.S1 = self.RNG.normal(self.mu.S1, self.sigma)
-        self.T1 = self.RNG.normal(self.mu.T1, self.sigma)
+        Returns
+        -------
+            Si self.exciton != 0, change self.electron et self.hole à False, change self.exciton à 0.
+            Enfin, retourne 0 car les Host ne sont pas des molécules émittrice (dans le visible).
+        """
+
+        if self.exciton :
+            self.exciton = EXCITON["none"]
+            self.electron = False
+            self.hole = False
+            return False
+
+
+@dataclass
+class Proportion :
+    """Classe représentant les proportions de chaque molécules au sein du réseau
+
+    Attirbutes
+    ----------
+    host : float
+        Proportion de molécules Host au sein du réseau.
+    tadf : float
+        Proportion de molécules TADF au sein du réseau.
+    fluo : float
+        Proportion de molécules Fluorescent au sein du réseau.
+    """
+    host : float
+    tadf : float
+    fluo : float
