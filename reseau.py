@@ -15,11 +15,9 @@
 from event import *
 from molecule import *
 import constants as cst
-
-from math import exp, log, prod
-import matplotlib.pyplot as plt
-from matplotlib import use
+from math import exp, log, prod, inf
 from random import Random
+from collections import deque
 
 # Classe destinée à stocker les recombinaisons par type de molécule et dans l'ordre
 # class where :
@@ -72,7 +70,7 @@ class Lattice :
         Vecteur de champ électrique.
     _lattice_constant : float
         Constante de maille du réseau.
-    _transfer_rate : float
+    _charge_transfer_rate : float
         Taux de transfert des charges au sein du réseau.
     _temperature : float
         Température de fonctionnement du réseau.
@@ -109,48 +107,58 @@ class Lattice :
     ####____Méthodes de démarrage du réseau____####
     ###############################################
     def __init__(self, dimension : tuple[int,int,int], proportions : tuple[float,float,float],
-                 electric_field : float = 10.**(-1), charges : int = 10, architecture : str = NotImplemented) -> None :
+                 electric_field : float = 10.**(-1), charges : int = 10, charge_tranfer_distance : int = 1,
+                 architecture : str = NotImplemented) -> None :
+        self._init_raises(dimension, proportions)
         self._seed : Random = Random()
         self._lattice_parameters_creation(dimension, proportions, electric_field, charges)
-        self._grid : list[list[list[Host | TADF | Fluorescent]]] = self._lattice_creation()
+        self._grid : list[list[list[Host | TADF | Fluorescent]]] = self._lattice_creation(charge_tranfer_distance)
         self._charges_injection()
         self._events_creation()
-        self._recombinations : int = 0
+        self._injection : int = 2 * charges
         self._emission : int = 0
+        self._recombination : int = 0
         self._IQE : float = 0.
         self._step : int = 0
-        self.time : float = 0.
+        self._time : float = 0.
+        self._cache : deque[Event] = deque((None for i in range(10)), 10)
 
+    def _init_raises(self, dimension : tuple[int, int, int], proportions : tuple[int, int, int]) -> None :
+        if not isinstance(dimension, tuple) :
+            raise TypeError(f"Expected type(dimension) to be tuple, got {type(dimension)}.")
+        elif len(dimension) != 3 :
+            raise IndexError(f"Expected dimension length to be 3, got {len(dimension)}.")
+        elif dimension[-1] < 3 :
+            raise ValueError(f"Expected the last component of dimension to be > 2, got {dimension[-1]}.")
+        if not isinstance(dimension, tuple) :
+            raise TypeError(f"Expected type(proportions) to be tuple, got {type(dimension)}.")
+        elif len(proportions) != 3 :
+            raise IndexError(f"Expected proportions length to be 3, got {len(dimension)}.")
+        if  min(proportions) * prod(dimension) < 1 :
+            minimum = 1 / min(proportions)
+            raise ValueError(f"Not enough molecules for current proportions and dimension.\n Expected at least {minimum}, got {prod(dimension)}.")
+        
     def _lattice_parameters_creation(self, dimension : tuple[int,int,int], proportions : tuple[float,float,float],
                                      electric_field : float, charges : int) -> None :
-        if len(dimension) != 3 :
-            raise IndexError(f"dimensions length must be 3, got {len(dimension)}")
-        if dimension[-1] < 3 :
-            raise ValueError(f"The last component of dimension must be > 2, got {dimension[-1]}.")
-        if len(proportions) != 3 :
-            raise IndexError(f"proportions length must be 3, got {len(dimension)}")
         if sum(proportions) != 1. :
             norm = sum(dimension)
             proportions = (dimension[0] / norm, dimension[1] / norm, dimension[2] / norm)
-        if  min(proportions) * prod(dimension) < 1 :
-            minimum = 1 / min(proportions)
-            raise ValueError(f"Not enough molecules for current proportions. Expected at least {minimum}, got {prod(dimension)}")
         self._dimension : Point = Point(*dimension)
         self._proportions : Proportion = Proportion(*proportions)
         self._electric_field : Vector = Vector(0, 0, electric_field)    # [eV/nm]
         self._lattice_constant : float = 1.                             # [nm]
-        self._transfer_rate : float = 10.**13                           # [Hz]
+        self._charge_transfer_rate : float = 10.**13                    # [Hz]
         self._temperature : float = 300.                                # [K]
         self._charges : int = charges
 
-    def _lattice_creation(self) -> list[list[list[Host | TADF | Fluorescent]]] :
+    def _lattice_creation(self, distance) -> list[list[list[Host | TADF | Fluorescent]]] :
         x_max : int = self._dimension.x
         y_max : int = self._dimension.y
         z_max : int = self._dimension.z
         grid_size : int = x_max * y_max * z_max
-        n_fluo : int = max(int(grid_size * self._proportions.fluo), 1)
-        n_tadf : int = max(int(grid_size * self._proportions.tadf), 1)
-        n_host : int = max(int(grid_size - 2 * x_max * y_max - n_fluo - n_tadf), 1)
+        n_fluo : int = int(grid_size * self._proportions.fluo)
+        n_tadf : int = int(grid_size * self._proportions.tadf)
+        n_host : int = grid_size - 2 * x_max * y_max - n_fluo - n_tadf
         sub_z_max : int = z_max - 2
         sub_grid_size : int = x_max * y_max * sub_z_max
         sub_grid : list[int] = self._seed.sample(
@@ -162,18 +170,18 @@ class Lattice :
         grid : list[list[list[int]]] = [[[0 for x in range(x_max)] for y in range(y_max)]]
         grid.extend([[sub_grid[y * x_max : (y+1) * x_max] for y in range(y_max)] for z in range(sub_z_max)])
         grid.extend([[[0 for x in range(x_max)] for y in range(y_max)]])
-        return [[[self._molecule_type(n, Point(x,y,z)) for x, n in enumerate(ssgrid)] for y, ssgrid in enumerate(sgrid)] for z, sgrid in enumerate(grid)]
+        return [[[self._molecule_type(n, Point(x,y,z), distance) for x, n in enumerate(ssgrid)] for y, ssgrid in enumerate(sgrid)] for z, sgrid in enumerate(grid)]
     
-    def _molecule_type(self, n : int, position : Point) -> Host | TADF | Fluorescent :
+    def _molecule_type(self, n : int, position : Point, distance : int) -> Host | TADF | Fluorescent :
         if n == 0 :
-            return Host(position, self._neighbourhood(position))
+            return Host(position, self._neighbourhood(position, distance))
         elif n == 1 :
-            return TADF(position, self._neighbourhood(position))
+            return TADF(position, self._neighbourhood(position, distance))
         elif n == 2 :
-            return Fluorescent(position, self._neighbourhood(position))
+            return Fluorescent(position, self._neighbourhood(position, distance))
         raise ValueError(f"n should be 0, 1 or 2, got {n}")
 
-    def _neighbourhood(self, position : Point, distance : int = 1) -> list[Point] :
+    def _neighbourhood(self, position : Point, distance : int) -> list[Point] :
         x_range = self._born_von_karman(position.x, distance, "x")
         y_range = self._born_von_karman(position.y, distance, "y")
         z_range = self._born_von_karman(position.z, distance, "z")
@@ -217,8 +225,7 @@ class Lattice :
         self._holes_locations.extend(self._seed.sample(positions, k = self._charges))
         for electron, hole in zip(self._electrons_locations, self._holes_locations) :
             self._grid[electron.z][electron.y][electron.x].switch_electron()
-            self._grid[hole.z][hole.y][hole.x].switch_hole()
-        
+            self._grid[hole.z][hole.y][hole.x].switch_hole()       
     
     def _events_creation(self) -> None :
         self._move_electron_events : list[Event] = self._init_move_electron_events()
@@ -228,6 +235,7 @@ class Lattice :
         self._isc_events : list[Event] = []
         self._binding_events : list[Event] = []
         self._capture_events : list[Event] = []
+        self._exciton_events : list[Event] = [] # NotImplemented
 
     def _init_move_electron_events(self) -> list[Event] :
         molecules = (
@@ -235,12 +243,18 @@ class Lattice :
             for position in self._electrons_locations
         )
         events = (
-            Event(molecule.position, neighbour, self._time_move_electron(molecule.position, neighbour), EVENTS["move"], PARTICULES["electron"])
+            [
+                Event(molecule.position, neighbour, self._time_move_electron(molecule.position, neighbour), EVENTS["move"], PARTICULES["electron"])
+                for neighbour in molecule.neighbourhood
+                if neighbour not in self._electrons_locations
+            ]
             for molecule in molecules
-            for neighbour in molecule.neighbourhood
-            if neighbour not in self._electrons_locations
         )
-        return list(events)
+        fastests = (
+            min(event)
+            for event in events
+        )
+        return list(fastests)
 
     def _init_move_hole_events(self) -> list[Event] :
         molecules = (
@@ -248,12 +262,18 @@ class Lattice :
             for position in self._holes_locations
         )
         events = (
-            Event(molecule.position, neighbour, self._time_move_hole(molecule.position, neighbour), EVENTS["move"], PARTICULES["hole"])
+            [
+                Event(molecule.position, neighbour, self._time_move_hole(molecule.position, neighbour), EVENTS["move"], PARTICULES["hole"])
+                for neighbour in molecule.neighbourhood
+                if neighbour not in self._holes_locations
+            ]
             for molecule in molecules
-            for neighbour in molecule.neighbourhood
-            if neighbour not in self._holes_locations
         )
-        return list(events)
+        fastests = (
+            min(event)
+            for event in events
+        )
+        return list(fastests)
 
 
 
@@ -261,15 +281,15 @@ class Lattice :
     ####____Méthodes de calcul des durées de chaque événement_____####
     ##################################################################
     def _time_move_electron(self, initial : Point, final : Point) -> float :
-        rng = 1. - self._seed.random()
+        rng : float = 1. - self._seed.random()
         movement : Vector = (final - initial) * self._lattice_constant
         delta_energy : float = self._lumo_energy(initial, final)
-        delta_energy += self._electric_field * movement
+        delta_energy += -1. * self._electric_field * movement
         delta_energy += self._electron_electrostatic_energy(initial, final)
-        if delta_energy < 0 : 
-            return - log(rng) / self._transfer_rate
-        else :
-            return - (log(rng) / self._transfer_rate) * exp(delta_energy / (cst.BOLTZMANN * self._temperature))
+        transfer_rate : float = self._charge_transfer_rate
+        if delta_energy >= 0 :
+            transfer_rate *= exp(- delta_energy / (cst.BOLTZMANN * self._temperature))
+        return - log(rng) / transfer_rate
         
     def _lumo_energy(self, initial : Point, final : Point) -> float :
         return self._get_molecule(final).lumo_energy - self._get_molecule(initial).lumo_energy
@@ -283,7 +303,9 @@ class Lattice :
             delta_r : float = 1. / new_r.norm() - 1. / old_r.norm()
             output += cst.ELECTROSTATIC * delta_r
         for location in self._holes_locations :
-            if location == final : continue
+            if location == final :
+                output = -inf
+                break
             old_r = (location - initial) * self._lattice_constant
             new_r = (location - final) * self._lattice_constant
             delta_r = 1. / new_r.norm() - 1. / old_r.norm()
@@ -294,18 +316,16 @@ class Lattice :
         rng = 1. - self._seed.random()
         movement : Vector = (final - initial) * self._lattice_constant
         delta_energy = self._homo_energy(initial, final)
-        delta_energy -= self._electric_field * movement
+        delta_energy += 1. * self._electric_field * movement
         delta_energy += self._hole_electrostatic_energy(initial, final)
-        if delta_energy < 0 : 
-            return - log(rng) / self._transfer_rate
-        else :
-            return - (log(rng) / self._transfer_rate) * exp(delta_energy / (cst.BOLTZMANN * self._temperature))
+        transfer_rate : float = self._charge_transfer_rate
+        if delta_energy >= 0 :
+            transfer_rate *= exp(- delta_energy / (cst.BOLTZMANN * self._temperature))
+        return - log(rng) / transfer_rate
         
     def _homo_energy(self, initial : Point, final : Point) -> float :
-        return self._get_molecule(initial).homo_energy - self._get_molecule(final).homo_energy
+        return self._get_molecule(final).homo_energy - self._get_molecule(initial).homo_energy
 
-    # Calcul l'intéraction Coulombienne.
-    # Arguments :   - initial : position du trou considéré
     def _hole_electrostatic_energy(self, initial : Point, final : Point) -> float :
         output : float = 0.
         for location in self._holes_locations :
@@ -315,7 +335,9 @@ class Lattice :
             delta_r : float = 1. / new_r.norm() - 1. / old_r.norm()
             output += cst.ELECTROSTATIC * delta_r
         for location in self._electrons_locations :
-            if location == final : continue
+            if location == final :
+                output = -inf
+                break
             old_r = (location - initial) * self._lattice_constant
             new_r = (location - final) * self._lattice_constant
             delta_r = 1. / new_r.norm() - 1. / old_r.norm()
@@ -362,7 +384,7 @@ class Lattice :
             for neighbour in neighbourhood
             if not self._get_molecule(neighbour).electron
         )
-        self._move_electron_events.extend(events)
+        self._move_electron_events.append(min(events))
 
     def _new_move_hole_events(self, position : Point) -> None :
         neighbourhood = self._get_molecule(position).neighbourhood
@@ -371,7 +393,7 @@ class Lattice :
             for neighbour in neighbourhood
             if not self._get_molecule(neighbour).hole
         )
-        self._move_hole_events.extend(events)
+        self._move_hole_events.append(min(list(events)))
 
     def _new_bound_event(self, position : Point) -> None :
         event = Event(position, position, 0., EVENTS["bound"], PARTICULES["exciton"])
@@ -388,6 +410,9 @@ class Lattice :
     def _new_capture_hole_event(self, position : Point) -> None :
         event = Event(position, position, 0., EVENTS["capture"], PARTICULES["hole"])
         self._capture_events.append(event)
+
+    def _new_unbound_event(self, position : Point) -> None :
+        Event(position, position, 0., EVENTS["unbound"], PARTICULES["exciton"])
 
 
 
@@ -430,6 +455,7 @@ class Lattice :
         self._electrons_locations.append(self._seed.choice(positions))
         position = self._electrons_locations[-1]
         self._grid[position.z][position.y][position.x].switch_electron()
+        self._injection += 1
 
     def _hole_reinjection(self) -> None :
         positions = [
@@ -441,11 +467,12 @@ class Lattice :
         self._holes_locations.append(self._seed.choice(positions))
         position = self._holes_locations[-1]
         self._grid[position.z][position.y][position.x].switch_hole()
+        self._injection += 1
 
     def _decay(self, position : Point) -> None :
         photon = self._grid[position.z][position.y][position.x].exciton_decay()
         self._excitons_locations.remove(position)
-        self._recombinations += 1
+        self._recombination += 1
         if photon : self._emission += 1
 
 
@@ -459,6 +486,8 @@ class Lattice :
         events.sort(reverse = True)
         try : event = events.pop()
         except IndexError : return False
+        self._cache.popleft()
+        self._cache.append(event)
         #   Traite les événements de type "move"
         if event.kind == EVENTS["move"] :
             #   Traite le cas d'un électron
@@ -548,28 +577,27 @@ class Lattice :
         for event in self._capture_events :
             event.tau -= time
 
-    def operations(self, stop : int, start : int = 0) -> None :
-        for i in range(start, stop) :
-            #   Affiche l'étape régulièrement
-            if not self._step%1000 :
-                print (f"Step {self._step}")
+    def operations(self, stop : int) -> None :
+        for i in range(stop) :
             self._step += 1
-            time = self.time
+            # time = self._time
             #   Exécute l'évenement suivant et s'assure que le temps n'a pas diminué.
-            if self._first_reaction_method() :
-                assert time <= self.time
-            else :
-                print (f"Step {i} : No more events available !")
-                print ("Stopping...")
+            try : 
+                running = self._first_reaction_method()
+            except ZeroDivisionError : 
+                print(self._cache)
                 return
+            if not running :
+                return
+            # if self._first_reaction_method() :
+            #     assert time <= self._time
         #   Mets à jour l'efficacité quantique interne
-        if self._recombinations > 0 :
-            self._IQE = 100. * float(self._emission)/float(self._recombinations)
+        self._IQE = 100. * 2. * float(self._emission) / float(self._injection)
     
 
 
     ####################################
-    ####____Méthodes get privées____####
+    ####____Méthodes get____####
     ####################################
     def _get_molecule_type(self, position : Point) -> type :
         return type(self._grid[position.z][position.y][position.x])
@@ -583,150 +611,11 @@ class Lattice :
         + self._binding_events + self._capture_events
         return output
     
-
-
-    ##################################################################
-    ####____Méthode d'affichage du réseau dans son état actuel____####
-    ##################################################################
-    def plot(self, nom : str = "Inconnu") :
-        use("Agg")
-        plt.figure(dpi=100)
-        axes = plt.axes(projection = "3d")
-
-        x_grid = [0, self._dimension.x - 1]
-        y_grid = [0, self._dimension.y - 1]
-        z_grid = [0, self._dimension.z - 1]
-        for x in x_grid :
-            for y in y_grid :
-                axes.plot([x,x], [y,y], z_grid, linestyle = "dashed", color = "k")
-            for z in z_grid :
-                axes.plot([x,x], y_grid, [z,z], linestyle = "solid", color = "k")
-        for y in y_grid :
-            for z in z_grid :
-                axes.plot(x_grid, [y,y], [z,z], linestyle = "solid", color = "k")
-
-        color = "b"
-        electron_host = [
-            position
-            for position in self._electrons_locations
-            if self._get_molecule_type(position) is Host
-        ]
-        if len(electron_host) > 0 :
-            marker_style = "o"
-            x = [position.x for position in electron_host]
-            y = [position.y for position in electron_host]
-            z = [position.z for position in electron_host]
-            axes.scatter(x, y, z, s = 100, c = color, marker = marker_style)
-        electron_tadf = [
-            position
-            for position in self._electrons_locations
-            if self._get_molecule_type(position) is TADF
-        ]
-        if len(electron_tadf) > 0 :
-            marker_style = "s"
-            x = [position.x for position in electron_tadf]
-            y = [position.y for position in electron_tadf]
-            z = [position.z for position in electron_tadf]
-            axes.scatter(x, y, z, s = 100, c = color, marker = marker_style)
-        electron_fluorescent = [
-            position
-            for position in self._electrons_locations
-            if self._get_molecule_type(position) is Fluorescent
-        ]
-        if len(electron_fluorescent) > 0 :
-            marker_style = "^"
-            x = [position.x for position in electron_fluorescent]
-            y = [position.y for position in electron_fluorescent]
-            z = [position.z for position in electron_fluorescent]
-            axes.scatter(x, y, z, s = 75, c = color, marker = marker_style)
-
-        color = "r"
-        hole_host = [
-            position
-            for position in self._holes_locations
-            if self._get_molecule_type(position) is Host
-        ]
-        if len(hole_host) > 0 :
-            marker_style = "o"
-            x = [position.x for position in hole_host]
-            y = [position.y for position in hole_host]
-            z = [position.z for position in hole_host]
-            axes.scatter(x, y, z, s = 100, c = color, marker = marker_style)
-        hole_tadf = [
-            position
-            for position in self._holes_locations
-            if self._get_molecule_type(position) is TADF
-        ]
-        if len(hole_tadf) > 0 :
-            marker_style = "s"
-            x = [position.x for position in hole_tadf]
-            y = [position.y for position in hole_tadf]
-            z = [position.z for position in hole_tadf]
-            axes.scatter(x, y, z, s = 100, c = color, marker = marker_style)
-        hole_fluorescent = [
-            position
-            for position in self._holes_locations
-            if self._get_molecule_type(position) is Fluorescent
-        ]
-        if len(hole_fluorescent) > 0 :
-            marker_style = "^"
-            x = [position.x for position in hole_fluorescent]
-            y = [position.y for position in hole_fluorescent]
-            z = [position.z for position in hole_fluorescent]
-            axes.scatter(x, y, z, s = 100, c = color, marker = marker_style)
-
-        color = "m"
-        exciton_host = [
-            position
-            for position in self._excitons_locations
-            if self._get_molecule_type(position) is Host
-        ]
-        if len(exciton_host) > 0 :
-            marker_style = "o"
-            x = [position.x for position in exciton_host]
-            y = [position.y for position in exciton_host]
-            z = [position.z for position in exciton_host]
-            axes.scatter(x, y, z, s = 100, c = color, marker = marker_style)
-        exciton_tadf = [
-            position
-            for position in self._excitons_locations
-            if self._get_molecule_type(position) is TADF
-        ]
-        if len(exciton_tadf) > 0 :
-            marker_style = "s"
-            x = [position.x for position in exciton_tadf]
-            y = [position.y for position in exciton_tadf]
-            z = [position.z for position in exciton_tadf]
-            axes.scatter(x, y, z, s = 100, c = color, marker = marker_style)
-        exciton_fluorescent = [
-            position
-            for position in self._excitons_locations
-            if self._get_molecule_type(position) is Fluorescent
-        ]
-        if len(exciton_fluorescent) > 0 :
-            marker_style = "^"
-            x = [position.x for position in exciton_fluorescent]
-            y = [position.y for position in exciton_fluorescent]
-            z = [position.z for position in exciton_fluorescent]
-            axes.scatter(x, y, z, s = 100, c = color, marker = marker_style)
-
-        axes.set_xlabel("x", size = 16)
-        axes.set_ylabel("y", size = 16)
-        axes.set_zlabel("z", size = 16)
-        axes.set_xlim([0, self._dimension.x - 1])
-        axes.set_ylim([0, self._dimension.y - 1])
-        axes.set_zlim([0, self._dimension.z - 1])
-        plt.tight_layout()
-        plt.savefig(nom)
-        plt.close()
-        return
-
-from time import time
-start = time()
-test = Lattice((10,10,10), (0.84, 0.15, 0.01), charges = 1)
-op = 10**6
-for i in range(100) :
-    test.operations(1)
-print(test._IQE)
-end = time()
-print(f"{end - start} s")
+    def get_IQE(self) -> float :
+        return self._IQE
+    
+    def get_particules_positions(self) -> tuple[list[tuple[Point, type]], list[tuple[Point, type]], list[tuple[Point, type]]] :
+        electrons_locations = [(position, self._get_molecule_type(position)) for position in self._electrons_locations]
+        holes_locations = [(position, self._get_molecule_type(position)) for position in self._holes_locations]
+        excitons_locations = [(position, self._get_molecule_type(position)) for position in self._excitons_locations]
+        return electrons_locations, holes_locations, excitons_locations

@@ -5,6 +5,8 @@
 #   python version : 3.10.4
 #   modules : reaseau, molecule, event, mu
 #
+#   énergie des lumo définies négatives car occupé par des électrons virtuels (-e)
+#   énergie des homo définies positives car occupé par des trous virtuels (+e)
 #
 #########################################################################################################
 from event import Point
@@ -16,13 +18,6 @@ EXCITON : dict[str, int] = {
     "singlet" : 1,
     "doublet" : 2,
     "triplet" : 3
-}
-
-ENERGIES : dict[str, str] = {
-    "homo" : "homo_energy",
-    "lumo" : "lumo_energy",
-    "s1" : "s1_energy",
-    "t1" : "t1_energy"
 }
 
 class Molecule :
@@ -50,8 +45,10 @@ class Molecule :
         Renverse l'état de l'attribut electron.
     switch_electron() -> None
         Renverse l'état de l'attribut hole.
-    generate_exciton(random_number : int) -> None
+    generate_exciton() -> None
         Génère un exciton.
+    unbound_exciton() -> None
+        Sépare l'exciton en le remettant à 0.
     exciton_decay() -> bool
         NotImplemented.
     """
@@ -147,16 +144,18 @@ class Fluorescent(Molecule) :
         Renverse l'état de l'attribut electron.
     switch_electron() -> None
         Renverse l'état de l'attribut hole.
-    generate_electron(random_number : int) -> None
-        Génère l'attribut exciton.
+    generate_exciton() -> None
+        Génère un exciton.
+    unbound_exciton() -> None
+        Sépare l'exciton en le remettant à 0.
     exciton_decay() -> bool
         Décompose l'exciton. Remet les attributs electron et hole en False et supprime l'attribut
         exciton. Retourne True si l'exciton est singulet (émetteur fluorescent), False sinon.
     """
 
     def __init__(self, position : Point,
-                 voisins : list[Point], homo_energy : float = -5.3,
-                 lumo_energy : float = -2.7, s1_energy : float = 2.69,
+                 voisins : list[Point], homo_energy : float = 5.25,
+                 lumo_energy : float = -1.84, s1_energy : float = 2.69,
                  t1_energy : float = 1.43, standard_deviation : float = 0.1) -> None :
         """Initialise l'instance de la classe Fluorescent.
         
@@ -203,7 +202,7 @@ class Fluorescent(Molecule) :
 class TADF(Molecule) :
     """Classe représentant une molécule TADF S1. Hérite de la classe Molecule.
 
-    L'instance par défaut correspond à une molécume fluorescente bleue ACRSA.
+    Les valeurs par défaut correspondent à la molécule TBPe.
 
     Attributes
     ----------
@@ -239,8 +238,10 @@ class TADF(Molecule) :
         Renverse l'état de l'attribut electron.
     switch_electron() -> None
         Renverse l'état de l'attribut hole.
-    generate_electron(random_number : int) -> None
-        Génère l'attribut exciton.
+    generate_exciton() -> None
+        Génère un exciton.
+    unbound_exciton() -> None
+        Sépare l'exciton en le remettant à 0.
     exciton_decay() -> bool
         Décompose l'exciton. Remet les attributs electron et hole en False et supprime l'attribut
         exciton. Retourne True si l'exciton est singulet (émetteur fluorescent), False sinon.
@@ -249,10 +250,12 @@ class TADF(Molecule) :
     """
 
     def __init__(self, position : Point,
-                 voisins : list[Point], homo_energy : float = -5.8,
+                 voisins : list[Point], homo_energy : float = 5.8,
                  lumo_energy : float = -2.6, s1_energy : float = 2.55,
                  t1_energy : float = 2.52, standard_deviation : float = 0.1) -> None :
         """Initialise l'instance de la classe TADF.
+
+        Les valeurs part défaut correspondent à la molécule ACRSA
         
         Parameters
         ----------
@@ -307,7 +310,7 @@ class TADF(Molecule) :
 class Host(Molecule) :
     """Classe représentant une molécule Hote. Hérite de la classe Molecule.
 
-    L'instance par défaut correspond à une molécume fluorescente bleue DPEPO.
+    Les valeurs par défaut correspondent à la molécule DPEPO.
 
     Attributes
     ----------
@@ -343,18 +346,20 @@ class Host(Molecule) :
         Renverse l'état de l'attribut electron.
     switch_electron() -> None
         Renverse l'état de l'attribut hole.
-    generate_electron(random_number : int) -> None
-        Génère l'attribut exciton.
+    generate_exciton() -> None
+        Génère un exciton.
+    unbound_exciton() -> None
+        Sépare l'exciton en le remettant à 0.
     exciton_decay() -> bool
         Décompose l'exciton. Remet les attributs electron et hole en False et supprime l'attribut
         exciton. Retourne True si l'exciton est singulet (émetteur fluorescent), False sinon.
     """
 
     def __init__(self, position : Point,
-                 voisins : list[Point], homo_energy : float = -6.0,
+                 voisins : list[Point], homo_energy : float = 6.0,
                  lumo_energy : float = -2.0, s1_energy : float = 3.50,
                  t1_energy : float = 3.00, standard_deviation : float = 0.1) -> None :
-        """Initialise l'instance de la classe TADF.
+        """Initialise l'instance de la classe Host.
         
         Parameters
         ----------

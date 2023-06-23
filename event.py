@@ -9,39 +9,13 @@
 #########################################################################################################
 """Module contenant les dictionnaires, fonctions et classes représentants les points et les événements.
 
-Dictionnaires
+Dictionnaries
 -------------
 Les valeurs sont arbitraires mais uniques pour éviter toute utilisation indésirable.
-PARTICULES : {electron : 0, hole : 1, exciton : 2}
-    Dictionnaire contenant les types de charges. Les valeurs sont arbitraires.
-CROSSING : {ISC : 3, RISC : 4}
-    Dictionnaire contenant les sens de conversion intersystème. Les valeurs sont arbitraires.
-    ISC correspond au sens singulet-triplet et RISC au sens triplet-singulet.
-RADIATION : {NR : 5, fluorescent : 6}
-    Dictionnaire contenant les modes de radiation. Les valeurs sont arbitraires.
-BOUND_STATES : {bound : 7, unbound : 8}
-    Dictionnaire contenant les états de liaison des excitons. Les valeurs sont arbitraires.
-
-Fonctions
----------
-is_electron(value : int) -> bool
-    Vérifie si value correspond à la valeur de l'électron stockée dans le dictionnaire PARTICULES.
-is_hole(value : int) -> bool
-    Vérifie si value correspond à la valeur du trou stockée dans le dictionnaire PARTICULES.
-is_exciton(value : int) -> bool
-    Vérifie si value correspond à la valeur de l'exciton stockée dans le dictionnaire PARTICULES.
-def is_ISC(value : int) -> bool
-    Vérifie si value correspond à la valeur de ISC stockée dans le dictionnaire CROSSING.
-is_RISC(value : int) -> bool
-    Vérifie si value correspond à la valeur de RISC stockée dans le dictionnaire CROSSING.
-is_NR(value : int) -> bool
-    Vérifie si value correspond à la valeur de NR stockée dans le dictionnaire RADIATION.
-is_fluorescent(value : int) -> bool
-    Vérifie si value correspond à la valeur de fluorescent stockée dans le dictionnaire RADIATION.
-is_bound(value : int) -> bool
-    Vérifie si value correspond à la valeur de bound stockée dans le dictionnaire BOUND_STATES.
-is_unbound(value : int) -> bool
-    Vérifie si value correspond à la valeur de unbound stockée dans le dictionnaire BOUND_STATES.
+PARTICULES : {electron : 1, hole : 2, exciton : 3}
+    Dictionnaire contenant les types de charges.
+EVENTS : dict[str, int] = {"move" : 1, "bound" : 2, "ISC" : 3, "Forster" : 4, "decay" : 5, "unbound" : 6, "capture" : 7}
+    Dictionnaire contenant les types d'événements.
 
 Classes
 -------
@@ -53,25 +27,13 @@ Vector(Point) : x, y, z
     La multiplication entre deux vecteurs donne le produit scalaire.
     La multiplication par un nombre donne un nouveau vecteur.
 
-Event() : initial, final, tau
+Event() : initial, final, tau, kind, particule
     Classe représentant un événement. Ceux-ci sont caractérisé par une position initiale,
-    une position finale et une durée (tau).
-Move(Event) : initial, final, tau, particule
-    Classe représentant un événement de type déplacement. Contient aussi le type de particule à déplacer.
-    Utilisé pour déplacer les charges au sein du réseau.
-ISC(Event) : initial, final, tau, conversion
-    Classe représentant un événement de type conversion intersystème. Contient aussi le sens de réaction.
-    Utilisé pour les changement d'état de spin des excitons.
-Decay(Event) : initial, final, tau, radiation
-    Classe représentant un événement de type décroissance. Contient aussi le type de décroissance.
-    Utilisé pour l'émission d'exciton.
-Capture(Event) : initial, final, tau, particule
-    Classe représentant un événement de type capture électronique. Contient aussi le type de particule.
-    Utilisé pour la capture électronique aux électrodes opposées.
-    Ne doit pas être utilisé pour des excitons.
-Binding(Event), initial, final, tau, state
-    Classe représentant un événement de type liaison/séparation. Contient aussi l'état de liaison.
-    Utilisé pour la création et séparation des excitons. 
+    une position finale, une durée (tau), un type et une particule.
+    Les opérations de comparaisons <, >, <= et >= comparent la durée des événements.
+    Le but est de choisir le plus rapide.
+    Les opérations de comparaion == et != comparent les événéments les autres caractéristiques des évenements.
+    Le but est de déceler les actions d'une même particules ou qui causeraient une collision.
 """
 
 from dataclasses import dataclass
@@ -87,41 +49,12 @@ EVENTS : dict[str, int] = {
     "unbound" : 6,
     "capture" : 7
 }
+
 PARTICULES : dict[str, int] = {
      "electron" : 1,
      "hole" : 2,
      "exciton" : 3
 }
-
-
-def is_electron(value : int) -> bool :
-     return value == PARTICULES["electron"]
-
-def is_hole(value : int) -> bool :
-     return value == PARTICULES["hole"]
-
-def is_exciton(value : int) -> bool :
-     return value == PARTICULES["exciton"]
-
-
-def is_move_event(value : int) -> bool :
-    return value == EVENTS["move"]
-
-def is_bound_event(value : int) -> bool :
-     return value == EVENTS["bound"]
-
-def is_ISC_event(value : int) -> bool :
-    return value == EVENTS["ISC"]
-
-def is_Forster_event(value : int) -> bool :
-    return value == EVENTS["Forster"]
-
-def is_decay_event(value : int) -> bool :
-     return value == EVENTS["decay"]
-
-def is_unbound_event(value : int) -> bool :
-     return value == EVENTS["unbound"]
-
 
 
 @dataclass
@@ -208,7 +141,7 @@ class Event :
     def __eq__(self, other) -> bool :
         if isinstance(other, Event) :
             if self.kind == other.kind and self.particule == other.particule :
-                if self.kind in {EVENTS["move"], EVENTS["Forster"]} :
+                if self.kind in (EVENTS["move"], EVENTS["Forster"]) :
                     return self.initial == other.initial or self.final == other.final
                 else :
                     return self.initial == other.initial == self.final == other.final
