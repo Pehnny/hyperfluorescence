@@ -12,12 +12,38 @@
 from event import Point
 from random import Random
 from dataclasses import dataclass
+from math import inf
 
+#   Exciton spin coupling state
 EXCITON : dict[str, int] = {
     "none" : 0,
     "singlet" : 1,
     "doublet" : 2,
     "triplet" : 3
+}
+
+#   Transfer rates for different quantum mechanism [Hz].
+#   NR : (triplet/singlet) non-radiative, F : fluorescence, PH : phosphorescence
+TRANSFER_RATES : dict[str, float] = {
+    "charges" : 10.**13,
+    "DPEPO_NR" : inf,
+    "ACRSA_F" : 4.58 * 10.**6,
+    "ACRSA_PH" : 4.19 * 10.**6,
+    "TBPe_F" : inf,
+    "TBPe_NR" : inf
+}
+
+#   Förster energy transfer radius for ACRSA -> TBPe [nm].
+#   STS : singlet to singlet, TTS : triplet to singlet.
+TRANSFER_RADIUS : dict[str, float] = {
+    "STS" : 5.55,
+    "TTS" : 4.75
+}
+
+#   Spin Orbit Coupling amplitudes for ACRSA based on known values of ISC rates.
+SOC : dict[str, float] = {
+    "ISC" : 10.**8,
+    "RISC" : 10.**5
 }
 
 class Molecule :
@@ -53,8 +79,7 @@ class Molecule :
         NotImplemented.
     """
 
-    def __init__(self, position : Point,
-                 neighbours : list[Point]) :
+    def __init__(self, position : Point, neighbours : list[Point]) :
         """Initialise l'instance de Molecule.
 
         Parameters
@@ -105,7 +130,7 @@ class Molecule :
         raise NotImplementedError(f"{self.exciton_decay.__name__} is not implemented.")
 
 
-class Fluorescent(Molecule) :
+class Fluorophore(Molecule) :
     """Classe représentant une molécule fluorescente S1. Hérite de la classe Molecule.
 
     L'instance par défaut correspond à une molécume fluorescente bleue TBPe.
@@ -153,9 +178,8 @@ class Fluorescent(Molecule) :
         exciton. Retourne True si l'exciton est singulet (émetteur fluorescent), False sinon.
     """
 
-    def __init__(self, position : Point,
-                 voisins : list[Point], homo_energy : float = 5.25,
-                 lumo_energy : float = -1.84, s1_energy : float = 2.69,
+    def __init__(self, position : Point, neighbours : list[Point],
+                 homo_energy : float = 5.25, lumo_energy : float = -1.84, s1_energy : float = 2.69,
                  t1_energy : float = 1.43, standard_deviation : float = 0.1) -> None :
         """Initialise l'instance de la classe Fluorescent.
         
@@ -176,7 +200,7 @@ class Fluorescent(Molecule) :
         standard_deviation : float = 0.1
             Deviation standard des niveaux d'énergie.
         """
-        super().__init__(position, voisins)
+        super().__init__(position, neighbours)
         self.homo_energy : float = self.seed.gauss(homo_energy, standard_deviation)
         self.lumo_energy : float = self.seed.gauss(lumo_energy, standard_deviation)
         self.s1_energy : float = self.seed.gauss(s1_energy, standard_deviation)
@@ -250,7 +274,7 @@ class TADF(Molecule) :
     """
 
     def __init__(self, position : Point,
-                 voisins : list[Point], homo_energy : float = 5.8,
+                 neighbours : list[Point], homo_energy : float = 5.8,
                  lumo_energy : float = -2.6, s1_energy : float = 2.55,
                  t1_energy : float = 2.52, standard_deviation : float = 0.1) -> None :
         """Initialise l'instance de la classe TADF.
@@ -274,7 +298,7 @@ class TADF(Molecule) :
         standard_deviation : float = 0.1
             Deviation standard des niveaux d'énergie.
         """
-        super().__init__(position, voisins)
+        super().__init__(position, neighbours)
         self.homo_energy : float = self.seed.gauss(homo_energy, standard_deviation)
         self.lumo_energy : float = self.seed.gauss(lumo_energy, standard_deviation)
         self.s1_energy : float = self.seed.gauss(s1_energy, standard_deviation)
@@ -294,7 +318,7 @@ class TADF(Molecule) :
             self.exciton = EXCITON["none"]
             self.electron = False
             self.hole = False
-            return state == EXCITON["singlet"]
+            return state == EXCITON["triplet"] or state == EXCITON["singlet"]
         
     def intersystem_crossing(self) -> None :
         """Converti l'état de spin de l'exciton.
@@ -355,9 +379,8 @@ class Host(Molecule) :
         exciton. Retourne True si l'exciton est singulet (émetteur fluorescent), False sinon.
     """
 
-    def __init__(self, position : Point,
-                 voisins : list[Point], homo_energy : float = 6.0,
-                 lumo_energy : float = -2.0, s1_energy : float = 3.50,
+    def __init__(self, position : Point, neighbours : list[Point],
+                 homo_energy : float = 6.0, lumo_energy : float = -2.0, s1_energy : float = 3.50,
                  t1_energy : float = 3.00, standard_deviation : float = 0.1) -> None :
         """Initialise l'instance de la classe Host.
         
@@ -378,7 +401,7 @@ class Host(Molecule) :
         standard_deviation : float = 0.1
             Deviation standard des niveaux d'énergie.
         """
-        super().__init__(position, voisins)
+        super().__init__(position, neighbours)
         self.homo_energy : float = self.seed.gauss(homo_energy, standard_deviation)
         self.lumo_energy : float = self.seed.gauss(lumo_energy, standard_deviation)
         self.s1_energy : float = self.seed.gauss(s1_energy, standard_deviation)

@@ -46,8 +46,7 @@ EVENTS : dict[str, int] = {
     "ISC" : 3,
     "Forster" : 4,
     "decay" : 5,
-    "unbound" : 6,
-    "capture" : 7
+    "capture" : 6
 }
 
 PARTICULES : dict[str, int] = {
@@ -141,10 +140,10 @@ class Event :
     def __eq__(self, other) -> bool :
         if isinstance(other, Event) :
             if self.kind == other.kind and self.particule == other.particule :
-                if self.kind in (EVENTS["move"], EVENTS["Forster"]) :
+                if self.kind == EVENTS["move"] :
                     return self.initial == other.initial or self.final == other.final
                 else :
-                    return self.initial == other.initial == self.final == other.final
+                    return self.initial == other.initial and self.final == other.final
             else :
                 return False
         raise TypeError(f"other must be of type event, got {type(other)}")
