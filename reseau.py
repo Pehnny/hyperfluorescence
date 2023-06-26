@@ -382,16 +382,18 @@ class Lattice :
     def _time_TADF_decay(self, spin : int) -> float :
         rng : float = 1. - self._seed.random()
         if spin == EXCITON["triplet"] :
-            return - log(rng) / TRANSFER_RATES["ACRSA_PH"]
+            transfer_rate : float = TRANSFER_RATES["ACRSA_PH"]
         elif spin == EXCITON["singlet"] :
-            return - log(rng) / TRANSFER_RATES["ACRSA_F"]
+            transfer_rate : float = TRANSFER_RATES["ACRSA_F"]
+        return - log(rng) / transfer_rate
         
     def _time_fluorophore_decay(self, spin : int) -> float :
         rng : float = 1. - self._seed.random()
         if spin == EXCITON["triplet"] :
-            return -log(rng) / TRANSFER_RATES["TBPe_NR"]
+            transfer_rate : float = TRANSFER_RATES["TBPe_NR"]
         elif spin == EXCITON["singulet"] :
-            return - log(rng) / TRANSFER_RATES["TBPe_F"]
+            transfer_rate : float = TRANSFER_RATES["TBPe_F"]
+        return - log(rng) / transfer_rate
 
 
     
@@ -410,7 +412,7 @@ class Lattice :
                     for item in removed_events :
                         if item.initial != event.initial :
                             self._new_move_electron_event(item.initial)
-                break
+                return
         
     def _remove_move_hole_events(self, event : Event) -> None :
         removed_events : list[Event] = []
@@ -564,6 +566,15 @@ class Lattice :
     def _intersystem_crossing(self, position : Point) -> None :
         self._grid[position.z][position.y][position.x].intersystem_crossing()
 
+    def _FRET(self, initial : Point, final : Point) -> None :
+        spin = self._grid[initial.z][initial.y][initial.x].exciton
+        self._grid[initial.z][initial.y][initial.x].exciton_decay()
+        self._excitons_locations.remove(initial)
+        molecule = self._grid[final.z][final.y][final.x]
+        molecule.exciton = spin
+        photon = molecule.exciton_decay()
+        self._recombination += 1
+        if photon : self._emission += 1
 
 
 
@@ -630,14 +641,29 @@ class Lattice :
                 self._new_fluorophore_decay_event(event.final, molecule.exciton)
         #   Traite les événements de type conversion intersystème
         elif event.kind == EVENTS["ISC"] :
-            ...
+            self._intersystem_crossing(event.initial)
+            self._remove_ISC_event(event)
+            self._update_events(event.tau)
+            molecule = self._get_molecule(event.final)
+            decay_events : list[Event] = [
+                    self._new_TADF_decay_event(event.final, molecule.exciton),
+                    self._new_TADF_FRET_event(event.final, molecule.exciton),
+            ]
+            self._new_TADF_event(min(decay_events))
         #   Traite les événements de type transfert d'énergie de Forster
         elif event.kind == EVENTS["Forster"] :
-            ...
+            self._decay(event.initial)
+            self._remove_decay_event(event)
+            self._update_events(event.tau)
+            self._electron_reinjection()
+            self._new_move_electron_event(self._electrons_locations[-1])
+            self._hole_reinjection()
+            self._new_move_hole_event(self._holes_locations[-1])
         #   Traite les événements de type recombinaison
         elif event.kind == EVENTS["decay"] :
             self._decay(event.initial)
             self._remove_decay_event(event)
+            self._update_events(event.tau)
             self._electron_reinjection()
             self._new_move_electron_event(self._electrons_locations[-1])
             self._hole_reinjection()
@@ -673,21 +699,26 @@ class Lattice :
         while self._recombination < recombinations :
             count += 1
             self._step += 1
-            # time = self._time
+            time = self._time
             #   Exécute l'évenement suivant et s'assure que le temps n'a pas diminué.
             try : 
                 running = self._first_reaction_method()
-            except ZeroDivisionError : 
+            except ZeroDivisionError :
+                print("Zero Division occured.\n Stopping process...") 
                 print(self._cache)
                 return
             if not running :
+                print("No more events left.\n Stopping process...")
                 self._IQE = 100. * 2. * float(self._emission) / float(self._injection)
+                return 
+            if time > self._time :
+                print("Negative time occured. Stopping process...")
                 return
             if count == stop :
+                print("Occurrence limit reached.\n Stopping process...")
                 self._IQE = 100. * 2. * float(self._emission) / float(self._injection)
                 return
-            # if self._first_reaction_method() :
-            #     assert time <= self._time
+        print("Recquired amount of recombinations reached.\n Stopping process...") 
         self._IQE = 100. * 2. * float(self._emission) / float(self._injection)
     
 
