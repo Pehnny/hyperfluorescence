@@ -54,7 +54,7 @@ def plot(electrons : list[tuple[Point, type]], holes : list[tuple[Point, type]],
     electron_fluorescent = [
         position
         for position, molecule in electrons
-        if molecule is Fluorescent
+        if molecule is Fluorophore
     ]
     if len(electron_fluorescent) > 0 :
         marker_style = "^"
@@ -89,7 +89,7 @@ def plot(electrons : list[tuple[Point, type]], holes : list[tuple[Point, type]],
     hole_fluorescent = [
         position
         for position, molecule in holes
-        if molecule is Fluorescent
+        if molecule is Fluorophore
     ]
     if len(hole_fluorescent) > 0 :
         marker_style = "^"
@@ -124,7 +124,7 @@ def plot(electrons : list[tuple[Point, type]], holes : list[tuple[Point, type]],
     exciton_fluorescent = [
         position
         for position, molecule in excitons
-        if molecule is Fluorescent
+        if molecule is Fluorophore
     ]
     if len(exciton_fluorescent) > 0 :
         marker_style = "^"

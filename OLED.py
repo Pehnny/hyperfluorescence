@@ -6,7 +6,7 @@ proportions = (0.84,0.15,0.01)
 recombinations = 10**3
 start = time()
 test = Lattice(proportions)
-test.operations(recombinations, 10**5)
+test.operations(recombinations)
 # dimensions = test.get_dimensions()
 # for i in range(OP) :
 #     electrons, holes, excitons = test.get_particules_positions()

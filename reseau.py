@@ -150,6 +150,7 @@ class Lattice :
         self._proportions : Proportion = Proportion(*proportions)
         self._electric_field : Vector = Vector(0, 0, electric_field)    # [eV/nm]
         self._lattice_constant : float = 1.                             # [nm]
+        self._gamma : float = 10. / self._lattice_constant              # [1/nm]
         self._temperature : float = 300.                                # [K]
         self._cutoff : float = cutoff_radius                            # [nm]
         self._charges : int = charges
@@ -160,19 +161,22 @@ class Lattice :
         y_max : int = self._dimension.y
         z_max : int = self._dimension.z
         grid_size : int = x_max * y_max * z_max
-        n_fluo : int = round(grid_size * self._proportions.fluo)
+        host_layers : int = int(grid_size * self._proportions.host) // (x_max * y_max)
+        if host_layers%2 : host_layers -= 1
         n_tadf : int = round(grid_size * self._proportions.tadf)
-        n_host : int = grid_size - 2 * x_max * y_max - n_fluo - n_tadf
-        sub_z_max : int = z_max - 2
+        n_fluo : int = round(grid_size * self._proportions.fluo)
+        n_host : int = max(0, grid_size - host_layers * x_max * y_max - n_tadf - n_fluo)
+        assert n_host+n_tadf+n_fluo+host_layers*x_max*y_max == grid_size, f"Expected {grid_size} molecules, got {n_fluo+n_host+n_tadf}."
+        sub_z_max : int = z_max - host_layers
         sub_grid : list[int] = self._seed.sample(
             [0, 1, 2],
             k = n_host + n_tadf + n_fluo,
             counts = [n_host, n_tadf, n_fluo]
         )
         assert len(sub_grid) == x_max * y_max * sub_z_max, f"Expected len(sub_grid) to be {x_max * y_max * sub_z_max}, got {len(sub_grid)}."
-        grid : list[list[list[int]]] = [[[0 for x in range(x_max)] for y in range(y_max)]]
+        grid : list[list[list[int]]] = [[[0 for x in range(x_max)] for y in range(y_max)] for z in range(host_layers//2)]
         grid.extend([[sub_grid[y * x_max : (y+1) * x_max] for y in range(y_max)] for z in range(sub_z_max)])
-        grid.extend([[[0 for x in range(x_max)] for y in range(y_max)]])
+        grid.extend([[[0 for x in range(x_max)] for y in range(y_max)] for z in range(host_layers//2)])
         return [[[self._molecule_type(n, Point(x,y,z), distance) for x, n in enumerate(ssgrid)] for y, ssgrid in enumerate(sgrid)] for z, sgrid in enumerate(grid)]
     
     def _molecule_type(self, n : int, position : Point, distance : int) -> Host | TADF | Fluorophore :
@@ -292,7 +296,7 @@ class Lattice :
         delta_energy : float = self._lumo_energy(initial, final)
         delta_energy += -1. * self._electric_field * movement
         delta_energy += self._electron_electrostatic_energy(initial, final)
-        transfer_rate : float = TRANSFER_RATES["charges"]
+        transfer_rate : float = TRANSFER_RATES["charges"] * exp(-2. * self._gamma * movement.norm())
         if delta_energy >= 0 :
             transfer_rate *= exp(- delta_energy / (cst.BOLTZMANN * self._temperature))
         return - log(rng) / transfer_rate
@@ -324,7 +328,7 @@ class Lattice :
         delta_energy = self._homo_energy(initial, final)
         delta_energy += 1. * self._electric_field * movement
         delta_energy += self._hole_electrostatic_energy(initial, final)
-        transfer_rate : float = TRANSFER_RATES["charges"]
+        transfer_rate : float = TRANSFER_RATES["charges"] * exp(-2. * self._gamma * movement.norm())
         if delta_energy >= 0 :
             transfer_rate *= exp(- delta_energy / (cst.BOLTZMANN * self._temperature))
         return - log(rng) / transfer_rate
@@ -704,21 +708,21 @@ class Lattice :
             try : 
                 running = self._first_reaction_method()
             except ZeroDivisionError :
-                print("Zero Division occured.\n Stopping process...") 
+                print("Zero Division occured.\n", "Stopping process...") 
                 print(self._cache)
                 return
             if not running :
-                print("No more events left.\n Stopping process...")
+                print("No more events left.\n", "Stopping process...")
                 self._IQE = 100. * 2. * float(self._emission) / float(self._injection)
                 return 
             if time > self._time :
-                print("Negative time occured. Stopping process...")
+                print("Negative time occured.\n", "Stopping process...")
                 return
             if count == stop :
-                print("Occurrence limit reached.\n Stopping process...")
+                print("Occurrence limit reached.\n", "Stopping process...")
                 self._IQE = 100. * 2. * float(self._emission) / float(self._injection)
                 return
-        print("Recquired amount of recombinations reached.\n Stopping process...") 
+        print("Recquired amount of recombinations reached.\n", "Stopping process...") 
         self._IQE = 100. * 2. * float(self._emission) / float(self._injection)
     
 
