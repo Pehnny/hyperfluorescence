@@ -241,10 +241,8 @@ class Lattice :
             self._grid[hole.z][hole.y][hole.x].switch_hole()       
     
     def _events_creation(self) -> None :
-        self._move_electron_events : list[Event] = self._init_move_electron_events()
-        self._move_hole_events : list[Event] = self._init_move_hole_events()
-        self._binding_events : list[Event] = []
-        self._capture_events : list[Event] = []
+        self._electron_events : list[Event] = self._init_move_electron_events()
+        self.hole_events : list[Event] = self._init_move_hole_events()
         self._exciton_events : list[Event] = []
 
     def _init_move_electron_events(self) -> list[Event] :
@@ -395,7 +393,7 @@ class Lattice :
         rng : float = 1. - self._seed.random()
         if spin == EXCITON["triplet"] :
             transfer_rate : float = TRANSFER_RATES["TBPe_NR"]
-        elif spin == EXCITON["singulet"] :
+        elif spin == EXCITON["singlet"] :
             transfer_rate : float = TRANSFER_RATES["TBPe_F"]
         return - log(rng) / transfer_rate
 
@@ -408,9 +406,9 @@ class Lattice :
         removed_events : list[Event] = []
         while True :
             try :
-                index = self._move_electron_events.index(event)
-                removed_events.append(self._move_electron_events[index])
-                self._move_electron_events.remove(event)
+                index = self._electron_events.index(event)
+                removed_events.append(self._electron_events[index])
+                self._electron_events.remove(event)
             except ValueError :
                 if len(removed_events) > 1 :
                     for item in removed_events :
@@ -422,9 +420,9 @@ class Lattice :
         removed_events : list[Event] = []
         while True :
             try :
-                index = self._move_hole_events.index(event)
-                removed_events.append(self._move_hole_events[index])
-                self._move_hole_events.remove(event)
+                index = self.hole_events.index(event)
+                removed_events.append(self.hole_events[index])
+                self.hole_events.remove(event)
             except ValueError :
                 if len(removed_events) > 1 :
                     for item in removed_events :
@@ -433,13 +431,16 @@ class Lattice :
                 break
 
     def _remove_bound_event(self, event : Event) -> None :
-        self._binding_events.remove(event)
+        self._exciton_events.remove(event)
 
     def _remove_decay_event(self, event : Event) -> None :
         self._exciton_events.remove(event)
 
-    def _remove_capture_event(self, event : Event) -> None :
-        self._capture_events.remove(event)
+    def _remove_capture_electron_event(self, event : Event) -> None :
+        self._electron_events.remove(event)
+
+    def _remove_capture_hole_event(self, event : Event) -> None :
+        self.hole_events.remove(event)
 
     def _remove_ISC_event(self, event : Event) -> None :
         self._exciton_events.remove(event)
@@ -456,7 +457,7 @@ class Lattice :
             for neighbour in neighbourhood
             if not self._get_molecule(neighbour).electron
         ]
-        self._move_electron_events.append(min(events))
+        self._electron_events.append(min(events))
 
     def _new_move_hole_event(self, position : Point) -> None :
         neighbourhood = self._get_molecule(position).neighbourhood
@@ -465,19 +466,19 @@ class Lattice :
             for neighbour in neighbourhood
             if not self._get_molecule(neighbour).hole
         ]
-        self._move_hole_events.append(min(events))
+        self.hole_events.append(min(events))
 
     def _new_bound_event(self, position : Point) -> None :
         event = Event(position, position, 0., EVENTS["bound"], PARTICULES["exciton"])
-        self._binding_events.append(event)
+        self._exciton_events.append(event)
 
     def _new_capture_electron_event(self, position : Point) -> None :
         event = Event(position, position, 0., EVENTS["capture"], PARTICULES["electron"])
-        self._capture_events.append(event)
+        self._electron_events.append(event)
 
     def _new_capture_hole_event(self, position : Point) -> None :
         event = Event(position, position, 0., EVENTS["capture"], PARTICULES["hole"])
-        self._capture_events.append(event)
+        self.hole_events.append(event)
 
     def _new_host_decay_event(self, position : Point) -> None :
         event = Event(position, position, 0., EVENTS["decay"], PARTICULES["exciton"])
@@ -571,11 +572,10 @@ class Lattice :
         self._grid[position.z][position.y][position.x].intersystem_crossing()
 
     def _FRET(self, initial : Point, final : Point) -> None :
-        spin = self._grid[initial.z][initial.y][initial.x].exciton
         self._grid[initial.z][initial.y][initial.x].exciton_decay()
         self._excitons_locations.remove(initial)
         molecule = self._grid[final.z][final.y][final.x]
-        molecule.exciton = spin
+        molecule.exciton = EXCITON["singlet"]
         photon = molecule.exciton_decay()
         self._recombination += 1
         if photon : self._emission += 1
@@ -676,26 +676,22 @@ class Lattice :
         elif event.kind == EVENTS["capture"] :
             if event.particule == PARTICULES["electron"] :
                 self._capture_electron(event.final)
-                self._remove_capture_event(event)
+                self._remove_capture_electron_event(event)
                 self._electron_reinjection()
                 self._new_move_electron_event(self._electrons_locations[-1])
             elif event.particule == PARTICULES["hole"] :
                 self._capture_hole(event.final)
-                self._remove_capture_event(event)
+                self._remove_capture_hole_event(event)
                 self._hole_reinjection()
                 self._new_move_hole_event(self._holes_locations[-1])
         return True
     
     def _update_events(self, time : float) -> None :
-        for event in self._move_electron_events :
+        for event in self._electron_events :
             event.tau -= time
-        for event in self._move_hole_events :
-            event.tau -= time
-        for event in self._binding_events :
+        for event in self.hole_events :
             event.tau -= time
         for event in self._exciton_events :
-            event.tau -= time
-        for event in self._capture_events :
             event.tau -= time
 
     def operations(self, recombinations : int, stop : int = 10**7) -> None :
@@ -737,8 +733,7 @@ class Lattice :
         return self._grid[position.z][position.y][position.x]
     
     def _get_all_events(self) -> list[Event] :
-        output : list[Event] = self._move_electron_events + self._move_hole_events \
-        + self._binding_events + self._capture_events + self._exciton_events
+        output : list[Event] = self._electron_events + self.hole_events + self._exciton_events
         return output
     
     def get_IQE(self) -> float :
