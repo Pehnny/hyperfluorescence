@@ -179,7 +179,7 @@ class Fluorophore(Molecule) :
     """
 
     def __init__(self, position : Point, neighbours : list[Point],
-                 homo_energy : float = 5.25, lumo_energy : float = -1.84, s1_energy : float = 2.69,
+                 homo_energy : float = 5.25, lumo_energy : float = -2.7, s1_energy : float = 2.69,
                  t1_energy : float = 1.43, standard_deviation : float = 0.1) -> None :
         """Initialise l'instance de la classe Fluorescent.
         

@@ -242,7 +242,7 @@ class Lattice :
     
     def _events_creation(self) -> None :
         self._electron_events : list[Event] = self._init_move_electron_events()
-        self.hole_events : list[Event] = self._init_move_hole_events()
+        self._hole_events : list[Event] = self._init_move_hole_events()
         self._exciton_events : list[Event] = []
 
     def _init_move_electron_events(self) -> list[Event] :
@@ -292,7 +292,7 @@ class Lattice :
         rng : float = 1. - self._seed.random()
         movement : Vector = (final - initial) * self._lattice_constant
         delta_energy : float = self._lumo_energy(initial, final)
-        delta_energy += -1. * self._electric_field * movement
+        delta_energy += 1. * self._electric_field * movement
         delta_energy += self._electron_electrostatic_energy(initial, final)
         transfer_rate : float = TRANSFER_RATES["charges"] * exp(-2. * self._gamma * movement.norm())
         if delta_energy >= 0 :
@@ -324,7 +324,7 @@ class Lattice :
         rng = 1. - self._seed.random()
         movement : Vector = (final - initial) * self._lattice_constant
         delta_energy = self._homo_energy(initial, final)
-        delta_energy += 1. * self._electric_field * movement
+        delta_energy += -1. * self._electric_field * movement
         delta_energy += self._hole_electrostatic_energy(initial, final)
         transfer_rate : float = TRANSFER_RATES["charges"] * exp(-2. * self._gamma * movement.norm())
         if delta_energy >= 0 :
@@ -420,9 +420,9 @@ class Lattice :
         removed_events : list[Event] = []
         while True :
             try :
-                index = self.hole_events.index(event)
-                removed_events.append(self.hole_events[index])
-                self.hole_events.remove(event)
+                index = self._hole_events.index(event)
+                removed_events.append(self._hole_events[index])
+                self._hole_events.remove(event)
             except ValueError :
                 if len(removed_events) > 1 :
                     for item in removed_events :
@@ -440,7 +440,7 @@ class Lattice :
         self._electron_events.remove(event)
 
     def _remove_capture_hole_event(self, event : Event) -> None :
-        self.hole_events.remove(event)
+        self._hole_events.remove(event)
 
     def _remove_ISC_event(self, event : Event) -> None :
         self._exciton_events.remove(event)
@@ -466,7 +466,7 @@ class Lattice :
             for neighbour in neighbourhood
             if not self._get_molecule(neighbour).hole
         ]
-        self.hole_events.append(min(events))
+        self._hole_events.append(min(events))
 
     def _new_bound_event(self, position : Point) -> None :
         event = Event(position, position, 0., EVENTS["bound"], PARTICULES["exciton"])
@@ -478,7 +478,7 @@ class Lattice :
 
     def _new_capture_hole_event(self, position : Point) -> None :
         event = Event(position, position, 0., EVENTS["capture"], PARTICULES["hole"])
-        self.hole_events.append(event)
+        self._hole_events.append(event)
 
     def _new_host_decay_event(self, position : Point) -> None :
         event = Event(position, position, 0., EVENTS["decay"], PARTICULES["exciton"])
@@ -689,7 +689,7 @@ class Lattice :
     def _update_events(self, time : float) -> None :
         for event in self._electron_events :
             event.tau -= time
-        for event in self.hole_events :
+        for event in self._hole_events :
             event.tau -= time
         for event in self._exciton_events :
             event.tau -= time
@@ -715,7 +715,7 @@ class Lattice :
                 print("Negative time occured.\n", "Stopping process...")
                 return
             if count == stop :
-                print("Occurrence limit reached.\n", "Stopping process...")
+                # print("Occurrence limit reached.\n", "Stopping process...")
                 self._IQE = 100. * 2. * float(self._emission) / float(self._injection)
                 return
         print("Recquired amount of recombinations reached.\n", "Stopping process...") 
@@ -733,7 +733,7 @@ class Lattice :
         return self._grid[position.z][position.y][position.x]
     
     def _get_all_events(self) -> list[Event] :
-        output : list[Event] = self._electron_events + self.hole_events + self._exciton_events
+        output : list[Event] = self._electron_events + self._hole_events + self._exciton_events
         return output
     
     def get_IQE(self) -> float :
