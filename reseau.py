@@ -304,20 +304,19 @@ class Lattice :
     
     def _electron_electrostatic_energy(self, initial : Point, final : Point) -> float :
         output : float = 0.
+        for location in self._holes_locations :
+            if location == final :
+                return -inf
+            old_ir : float = self._inverse_radius(((location - initial) * self._lattice_constant).norm())
+            new_ir : float = self._inverse_radius(((location - final) * self._lattice_constant).norm())
+            delta_ir : float = new_ir - old_ir
+            output -= cst.ELECTROSTATIC * delta_ir
         for location in self._electrons_locations :
             if location == initial : continue
             old_ir : float = self._inverse_radius(((location - initial) * self._lattice_constant).norm())
             new_ir : float = self._inverse_radius(((location - final) * self._lattice_constant).norm())
             delta_ir : float = new_ir - old_ir
             output += cst.ELECTROSTATIC * delta_ir
-        for location in self._holes_locations :
-            if location == final :
-                output = -inf
-                break
-            old_ir : float = self._inverse_radius(((location - initial) * self._lattice_constant).norm())
-            new_ir : float = self._inverse_radius(((location - final) * self._lattice_constant).norm())
-            delta_ir : float = new_ir - old_ir
-            output -= cst.ELECTROSTATIC * delta_ir
         return output
 
     def _time_move_hole(self, initial : Point, final : Point) -> float :
@@ -336,20 +335,19 @@ class Lattice :
 
     def _hole_electrostatic_energy(self, initial : Point, final : Point) -> float :
         output : float = 0.
+        for location in self._electrons_locations :
+            if location == final :
+                return -inf
+            old_ir : float = self._inverse_radius(((location - initial) * self._lattice_constant).norm())
+            new_ir : float = self._inverse_radius(((location - final) * self._lattice_constant).norm())
+            delta_ir : float = new_ir - old_ir
+            output -= cst.ELECTROSTATIC * delta_ir
         for location in self._holes_locations :
             if location == initial : continue
             old_ir : float = self._inverse_radius(((location - initial) * self._lattice_constant).norm())
             new_ir : float = self._inverse_radius(((location - final) * self._lattice_constant).norm())
             delta_ir : float = new_ir - old_ir
             output += cst.ELECTROSTATIC * delta_ir
-        for location in self._electrons_locations :
-            if location == final :
-                output = -inf
-                break
-            old_ir : float = self._inverse_radius(((location - initial) * self._lattice_constant).norm())
-            new_ir : float = self._inverse_radius(((location - final) * self._lattice_constant).norm())
-            delta_ir : float = new_ir - old_ir
-            output -= cst.ELECTROSTATIC * delta_ir
         return output
     
     def _inverse_radius(self, distance : float) -> float :
