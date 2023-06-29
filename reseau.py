@@ -106,8 +106,8 @@ class Lattice :
     ###############################################
     ####____Méthodes de démarrage du réseau____####
     ###############################################
-    def __init__(self, proportions : tuple[float,float,float], dimension : tuple[int,int,int] = (20, 20, 20),
-                 electric_field : float = 10.**(-1), charges : int = 8, charge_tranfer_distance : int = 1,
+    def __init__(self, proportions : tuple[float,float,float], dimension : tuple[int,int,int] = (20, 20, 10),
+                 electric_field : float = 10.**(-1), charges : int = 4, charge_tranfer_distance : int = 1,
                  cutoff_radius : float = 19.2, architecture : str = NotImplemented) -> None :
         self._init_raises(dimension, proportions, charge_tranfer_distance)
         self._seed : Random = Random()
@@ -162,10 +162,13 @@ class Lattice :
         z_max : int = self._dimension.z
         grid_size : int = x_max * y_max * z_max
         host_layers : int = int(grid_size * self._proportions.host) // (x_max * y_max)
-        if host_layers%2 : host_layers -= 1
+        if host_layers%2 :
+            host_layers -= 1
+        elif host_layers > 0 :
+            host_layers -= 2
         n_tadf : int = round(grid_size * self._proportions.tadf)
         n_fluo : int = round(grid_size * self._proportions.fluo)
-        n_host : int = max(0, grid_size - host_layers * x_max * y_max - n_tadf - n_fluo)
+        n_host : int = grid_size - host_layers * x_max * y_max - n_tadf - n_fluo
         assert n_host+n_tadf+n_fluo+host_layers*x_max*y_max == grid_size, f"Expected {grid_size} molecules, got {n_fluo+n_host+n_tadf}."
         sub_z_max : int = z_max - host_layers
         sub_grid : list[int] = self._seed.sample(
@@ -692,7 +695,7 @@ class Lattice :
         for event in self._exciton_events :
             event.tau -= time
 
-    def operations(self, recombinations : int, stop : int = 10**7) -> None :
+    def operations(self, recombinations : int, stop : int = 10**8) -> None :
         count : int = 0
         while self._recombination < recombinations :
             count += 1
