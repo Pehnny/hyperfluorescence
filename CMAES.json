@@ -1,0 +1,14 @@
+{
+    "dimension" : 2,
+    "generation" : 50,
+    "population" : 30,
+    "initial" : [
+        0.15, 0.0225
+    ],
+    "limits" : {
+        "bounds" : [
+            [0.10, 0.005],
+            [0.20, 0.05]
+        ]
+    }
+}
