@@ -106,7 +106,7 @@ class Lattice :
     ###############################################
     ####____Méthodes de démarrage du réseau____####
     ###############################################
-    def __init__(self, proportions : tuple[float,float,float], dimension : tuple[int,int,int] = (20, 20, 10),
+    def __init__(self, proportions : tuple[float,float,float], dimension : tuple[int,int,int] = (20, 20, 20),
                  electric_field : float = 10.**(-1), charges : int = 4, charge_tranfer_distance : int = 1,
                  cutoff_radius : float = 19.2, architecture : str = NotImplemented) -> None :
         self._init_raises(dimension, proportions, charge_tranfer_distance)
@@ -397,6 +397,11 @@ class Lattice :
         elif spin == EXCITON["singlet"] :
             transfer_rate : float = TRANSFER_RATES["TBPe_F"]
         return - log(rng) / transfer_rate
+    
+    def _time_host_decay(self) -> float :
+        rng : float = 1. - self._seed.random()
+        transfer_rate : float = TRANSFER_RATES["DPEPO_NR"]
+        return - log(rng) / transfer_rate
 
 
     
@@ -470,7 +475,7 @@ class Lattice :
         self._hole_events.append(min(events))
 
     def _new_bound_event(self, position : Point) -> None :
-        event = Event(position, position, 0., EVENTS["bound"], PARTICULES["exciton"])
+        event = Event(position, position, self._time_host_decay(), EVENTS["bound"], PARTICULES["exciton"])
         self._exciton_events.append(event)
 
     def _new_capture_electron_event(self, position : Point) -> None :
@@ -486,14 +491,29 @@ class Lattice :
         self._exciton_events.append(event)
 
     def _new_TADF_ISC_event(self, position : Point, spin : int) -> Event :
+        """Create an intersystem crossing (ISC) event on a TADF.
+
+        The lifetime of the crossing depends on a the direction (singlet-triplet or
+        triplet-singlet).
+        """
         event = Event(position, position, self._time_ISC(position, spin), EVENTS["ISC"], PARTICULES["exciton"])
         return event
     
     def _new_TADF_decay_event(self, position : Point, spin : int) -> Event :
+        """Create a decay event on a TADF.
+        
+        The lifetime of the exciton depend on its state (singlet or triplet).
+        """
         event = Event(position, position, self._time_TADF_decay(spin), EVENTS["decay"], PARTICULES["exciton"])
         return event
 
     def _new_TADF_FRET_event(self, position : Point, spin : int) -> Event :
+        """Create a new Forster resonance energy transfer (FRET) event.
+
+        It evaluates every FRET from a TADF to the emitters and keep the fastest.
+        This way, the slower FRET events who are not going to be chosen are pre-discarded
+        and allows the first reaction method to work faster.
+        """
         events = [
             Event(position, transfer, self._time_FRET(position, transfer, spin), EVENTS["Forster"], PARTICULES["exciton"])
             for transfer in self._fluorophores_locations
@@ -502,44 +522,69 @@ class Lattice :
         return event
     
     def _new_TADF_event(self, event : Event) -> None :
+        """Create a new event on a TADF.
+        
+        The event can be an intersystem crossing, a fluorescence, a phosphorescence or
+        a Forster resonance energy transfer.
+        The event kind is chosen by the first reaction method algorithm.
+        """
         self._exciton_events.append(event)
 
     def _new_fluorophore_decay_event(self, position : Point, spin : int) -> None :
+        """Create a new decay event on a fluorophore.
+
+        Occurs when an exciton is formed on a fluorophone.
+        """
         event = Event(position, position, self._time_fluorophore_decay(spin), EVENTS["decay"], PARTICULES["exciton"])
         self._exciton_events.append(event)
 
 
 
-    ####################################################
-    ####____Méthodes de transformation du réseau____####
-    ####################################################
+    ##############################################
+    ####____Lattice transformation methods____####
+    ##############################################
     def _move_electron(self, initial : Point, final : Point) -> None :
+        """Move an electron from a molecule to another.
+        """
         self._grid[initial.z][initial.y][initial.x].switch_electron()
         self._grid[final.z][final.y][final.x].switch_electron()
         self._electrons_locations.remove(initial)
         self._electrons_locations.append(final)
 
     def _move_hole(self, initial : Point, final : Point) -> None :
+        """Move a hole from a molecule to another.
+        """
         self._grid[initial.z][initial.y][initial.x].switch_hole()
         self._grid[final.z][final.y][final.x].switch_hole()
         self._holes_locations.remove(initial)
         self._holes_locations.append(final)
     
     def _form_exciton(self, position : Point) -> None :
+        """Form a molecular exciton.
+
+        Occurs when a hole (respectively an electron) meets an electron (hole)
+        on a molecule.
+        """
         self._grid[position.z][position.y][position.x].generate_exciton()
         self._electrons_locations.remove(position)
         self._holes_locations.remove(position)
         self._excitons_locations.append(position)
 
     def _capture_electron(self, position : Point) -> None :
+        """Remove an electron after an electronic capture.
+        """
         self._grid[position.z][position.y][position.x].switch_electron()
         self._electrons_locations.remove(position)
 
     def _capture_hole(self, position : Point) -> None :
+        """Remove a hole after an electronic capture.
+        """
         self._grid[position.z][position.y][position.x].switch_hole()
         self._holes_locations.remove(position)
 
     def _electron_reinjection(self) -> None :
+        """Inject a new electron after an electronic capture or a recombination.
+        """
         positions = [
                 Point(x, y, self._dimension.z - 1)
                 for x in range(self._dimension.x)
@@ -552,6 +597,8 @@ class Lattice :
         self._injection += 1
 
     def _hole_reinjection(self) -> None :
+        """Inject a new hole after an electronic capture or a recombination.
+        """
         positions = [
                 Point(x, y, 0)
                 for x in range(self._dimension.x)
@@ -564,22 +611,32 @@ class Lattice :
         self._injection += 1
 
     def _decay(self, position : Point) -> None :
+        """Decay of excitons on both each molecule.
+        
+        The Molecule classes handle if the recombination leads to an emission or not.
+        """
         photon = self._grid[position.z][position.y][position.x].exciton_decay()
         self._excitons_locations.remove(position)
         self._recombination += 1
         if photon : self._emission += 1
 
     def _intersystem_crossing(self, position : Point) -> None :
+        """Intersystem crossing on TADF.
+
+        The direction singlet-triplet or triplet-singlet is handled by the TADF class.
+        """
         self._grid[position.z][position.y][position.x].intersystem_crossing()
 
-    def _FRET(self, initial : Point, final : Point) -> None :
+    def _FRET(self, initial : Point) -> None :
+        """Forster resonance energy transfer (FRET) from TADF to fluorophore.
+        
+        It only works in the direction TADF-fluorophore for both singlet and triplet.
+        So a FRET is a garantied fluorescence in the current version.
+        """
         self._grid[initial.z][initial.y][initial.x].exciton_decay()
         self._excitons_locations.remove(initial)
-        molecule = self._grid[final.z][final.y][final.x]
-        molecule.exciton = EXCITON["singlet"]
-        photon = molecule.exciton_decay()
         self._recombination += 1
-        if photon : self._emission += 1
+        self._emission += 1
 
 
 
@@ -653,11 +710,12 @@ class Lattice :
             decay_events : list[Event] = [
                     self._new_TADF_decay_event(event.final, molecule.exciton),
                     self._new_TADF_FRET_event(event.final, molecule.exciton),
+                    self._new_TADF_ISC_event(event.final, molecule.exciton)
             ]
             self._new_TADF_event(min(decay_events))
         #   Traite les événements de type transfert d'énergie de Forster
         elif event.kind == EVENTS["Forster"] :
-            self._decay(event.initial)
+            self._FRET(event.initial)
             self._remove_decay_event(event)
             self._update_events(event.tau)
             self._electron_reinjection()
@@ -695,19 +753,14 @@ class Lattice :
         for event in self._exciton_events :
             event.tau -= time
 
-    def operations(self, recombinations : int, stop : int = 10**8) -> None :
+    def operations(self, recombinations : int, stop : int = 10**7) -> None :
         count : int = 0
         while self._recombination < recombinations :
             count += 1
             self._step += 1
             time = self._time
             #   Exécute l'évenement suivant et s'assure que le temps n'a pas diminué.
-            try : 
-                running = self._first_reaction_method()
-            except ZeroDivisionError :
-                print("Zero Division occured.\n", "Stopping process...") 
-                print(self._cache)
-                return
+            running = self._first_reaction_method()
             if not running :
                 print("No more events left.\n", "Stopping process...")
                 self._IQE = 100. * 2. * float(self._emission) / float(self._injection)
@@ -716,7 +769,7 @@ class Lattice :
                 print("Negative time occured.\n", "Stopping process...")
                 return
             if count == stop :
-                # print("Occurrence limit reached.\n", "Stopping process...")
+                print("Occurrence limit reached.\n", "Stopping process...")
                 self._IQE = 100. * 2. * float(self._emission) / float(self._injection)
                 return
         print("Recquired amount of recombinations reached.\n", "Stopping process...") 
