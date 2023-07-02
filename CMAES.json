@@ -2,6 +2,7 @@
     "dimension" : 2,
     "generation" : 50,
     "population" : 30,
+    "sigma" : 0.01,
     "initial" : [
         0.15, 0.0225
     ],

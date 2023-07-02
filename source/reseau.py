@@ -106,7 +106,7 @@ class Lattice :
     ###############################################
     ####____Méthodes de démarrage du réseau____####
     ###############################################
-    def __init__(self, proportions : tuple[float,float,float], dimension : tuple[int,int,int] = (20, 20, 20),
+    def __init__(self, proportions : tuple[float,float,float], dimension : tuple[int,int,int] = (20, 20, 10),
                  electric_field : float = 10.**(-1), charges : int = 4, charge_tranfer_distance : int = 1,
                  cutoff_radius : float = 19.2, architecture : str = NotImplemented) -> None :
         self._init_raises(dimension, proportions, charge_tranfer_distance)

@@ -1,16 +1,20 @@
 from reseau import *
 from pathlib import Path
+import json
 
 
+FILES = {
+    "in" : "in.json",
+    "out" : "out.json"
+}
 
 def main() -> int :
     source : Path = cwd()
     try :
-        with open(source.joinpath("in.txt")) as file :
-            line : str = file.readline()
+        with open(source.joinpath(FILES["in"])) as file :
+            proportions : list = json.load(file)
     except FileNotFoundError :
         return 1
-    proportions : list[float] = [float(x) for x in line.split()] 
     try :
         oled : Lattice = Lattice(proportions)
     except IndexError :
@@ -19,7 +23,7 @@ def main() -> int :
         return 3
     value = IQE(oled)
     with open(source.joinpath("out.txt"), "w") as file :
-        file.write(str(value))
+        json.dump(value, file)
     return 0
 
 def errors(value : int) -> None :
