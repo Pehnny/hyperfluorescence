@@ -10,16 +10,16 @@ import argparse
 
 
 
-def main(job_type : str, id : int) -> int :
-    print("Python code received job type = ", job_type, " and ID = ", id)
+def main(job_type : str, id_number : int) -> int :
+    print("Python code received job type = ", job_type, " and ID = ", id_number)
     if job_type not in ["s", "w"] :
         return 1
-    if not isinstance(id, int) :
+    if not isinstance(id_number, int) :
         return 2
     if job_type == "w" :
-        worker(id)
+        worker(id_number)
     elif job_type == "s" :
-        supervisor(id)
+        supervisor(id_number)
     return 0
     
 def errors(value : int) -> None :

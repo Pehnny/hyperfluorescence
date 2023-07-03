@@ -1,12 +1,11 @@
 {
-    "dimension" : 2,
-    "generation" : 50,
+    "generation" : 10,
     "population" : 30,
     "sigma" : 0.01,
     "initial" : [
         0.15, 0.0225
     ],
-    "limits" : {
+    "options" : {
         "bounds" : [
             [0.10, 0.005],
             [0.20, 0.05]

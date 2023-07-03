@@ -5,9 +5,6 @@
 
    Reference for CMA-ES : https://blog.otoro.net/2017/10/29/visual-evolution-strategies   
 """
-from Utilitaries import create_directories, prepare_workers, write_inputs, get_inputs, get_outputs, clean_workers, update_sequence
-import matplotlib.pyplot as plt
-import numpy as np
 import pickle
 from cma import CMAEvolutionStrategy as CMAES
 from pathlib import Path
@@ -24,8 +21,8 @@ FILES = {
     "history" : "history.txt"
 }
 
-def supervisor(id : int) -> None :
-    print(f"Supervisor with ID = {id}")
+def supervisor(id_number : int) -> None :
+    print(f"Supervisor with ID = {id_number}")
 
     # Generates useful paths and gets parameters
     home : Path = cwd()
@@ -38,9 +35,9 @@ def supervisor(id : int) -> None :
     history : Path = home.joinpath(FILES["history"])
 
     # Deals with the first supervisor
-    if id == 1 :
+    if id_number == 1 :
         # Creates solver
-        solver : CMAES = CMAES(parameters["initial"], parameters["sigma"], parameters["limits"])
+        solver : CMAES = CMAES(parameters["initial"], parameters["sigma"], parameters["options"])
         population : list = solver.ask(parameters["population"])
         # Copies files from source to worker_id and create input files (first generation)
         for n, worker in enumerate(workers) :
@@ -49,16 +46,20 @@ def supervisor(id : int) -> None :
                 copy(file, worker)
             input : Path = worker.joinpath(FILES["in"])
             with open(input, "w") as file :
-                json.dump(population[n], file)
+                json.dump(list(population[n]), file)
         # Save solver state
         with open(solver_file, "wb") as file :
             file.write(solver.pickle_dumps())
         # Creates history
-        with open(history, "x") as file :
-            ...
-        print(f"Supervisor {id} did its job.") 
+        try :
+            with open(history, "x") as file :
+                ...
+        except FileExistsError :
+            with open(history, "w") as file :
+                file.write("")
+        print(f"Supervisor {id_number} did its job.") 
     # Deals with next supervisors
-    elif 2 <= id <= parameters["generation"] :
+    elif 2 <= id_number <= parameters["generation"] :
         # Gets the inputs and outputs from the previous generation
         previous_population : list = []
         fitness : list = []
@@ -73,7 +74,7 @@ def supervisor(id : int) -> None :
             except FileNotFoundError :
                 home.joinpath("STOP").touch()
                 with open(home.joinpath("errors.txt"), "w") as file :
-                    file.write(f"Supervisor {id} didn't find the output of worker {n}")
+                    file.write(f"Supervisor {id_number} didn't find the output of worker {n}")
                 return
         # Loads and updates solver
         with open(solver_file, "rb") as file :
@@ -83,26 +84,28 @@ def supervisor(id : int) -> None :
         for worker in workers :
             worker.joinpath(FILES["out"]).unlink()
         # Saves history
-        xbest : list = solver.result.xbest.tolist()
+        xbest : list = list(solver.result.xbest)
         fbest : float = float(solver.result.fbest)
         values : list = [str(x) for x in xbest] + [str(fbest), "\n"]
+        print(values)
         with open(history, "a") as file :
             file.write(str("\t").join(values))
         # Generates a new generation
         if solver.stop() :
             home.joinpath("STOP").touch()
+            print(f"Solver excited early.")
             return
         population : list = solver.ask(parameters["population"])
         for n, worker in enumerate(workers) :
             input : Path = worker.joinpath(FILES["in"])
             with open(input, "w") as file :
-                json.dump(population[n], file)
+                json.dump(list(population[n]), file)
         # Saves solver
         with open(solver_file, "wb") as file :
             file.write(solver.pickle_dumps())
-        print(f"Supervisor {id} did its job.")
+        print(f"Supervisor {id_number} did its job.")
     # Deals with the last supervisor
-    elif id > parameters["generation"] :
+    elif id_number > parameters["generation"] :
          # Gets the inputs and outputs from the last generation
         previous_population : list = []
         fitness : list = []
@@ -117,14 +120,14 @@ def supervisor(id : int) -> None :
             except FileNotFoundError :
                 home.joinpath("STOP").touch()
                 with open(home.joinpath("errors.txt"), "w") as file :
-                    file.write(f"Supervisor {id} didn't find the output of worker {n}")
+                    file.write(f"Supervisor {id_number} didn't find the output of worker {n}")
                 return
         # Loads and updates solver
         with open(solver_file, "rb") as file :
             solver : CMAES = pickle.load(file)
         solver.tell(previous_population, fitness)
         # Saves history
-        xbest : list = solver.result.xbest.tolist()
+        xbest : list = list(solver.result.xbest)
         fbest : float = float(solver.result.fbest)
         values : list = [str(x) for x in xbest] + [str(fbest), "\n"]
         with open(history, "a") as file :
@@ -134,9 +137,13 @@ def supervisor(id : int) -> None :
             for file in worker.iterdir() :
                 file.unlink()
             worker.rmdir()
+        # Stops CMAES
         home.joinpath("STOP").touch()
-        print(f"Supervisor {id} finished the job.")
+        print(f"Supervisor {id_number} finished the job.")
         print(f"All workers were cleared. Results should be stored in {history}")
+    else :
+        print(f"Unvalid supervisor ID encountered.")
+        home.joinpath("STOP").touch()
 
 def cwd() -> Path :
     return Path(__file__).parent

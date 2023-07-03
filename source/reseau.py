@@ -106,16 +106,17 @@ class Lattice :
     ###############################################
     ####____Méthodes de démarrage du réseau____####
     ###############################################
-    def __init__(self, proportions : tuple[float,float,float], dimension : tuple[int,int,int] = (20, 20, 10),
+    def __init__(self, proportions : tuple[float,float,float], dimension : tuple[int,int,int] = (20, 20, 20),
                  electric_field : float = 10.**(-1), charges : int = 4, charge_tranfer_distance : int = 1,
                  cutoff_radius : float = 19.2, architecture : str = NotImplemented) -> None :
         self._init_raises(dimension, proportions, charge_tranfer_distance)
         self._seed : Random = Random()
-        self._lattice_parameters_creation(dimension, proportions, electric_field, charges, cutoff_radius)
+        self._lattice_parameters_creation(proportions, dimension, electric_field, charges, cutoff_radius)
         self._grid : list[list[list[Host | TADF | Fluorophore]]] = self._lattice_creation(charge_tranfer_distance)
         self._charges_injection()
         self._events_creation()
-        self._injection : int = 2 * charges
+        self._injected_electrons : int = charges
+        self._injected_holes : int = charges
         self._emission : int = 0
         self._recombination : int = 0
         self._IQE : float = 0.
@@ -141,7 +142,7 @@ class Lattice :
             minimum = 1 / min(proportions)
             raise ValueError(f"Not enough molecules for current proportions and dimension.\n Expected at least {minimum}, got {prod(dimension)}.")
         
-    def _lattice_parameters_creation(self, dimension : tuple[int,int,int], proportions : tuple[float,float,float],
+    def _lattice_parameters_creation(self, proportions : tuple[float,float,float], dimension : tuple[int,int,int],
                                      electric_field : float, charges : int, cutoff_radius : float) -> None :
         if sum(proportions) != 1. :
             norm = sum(dimension)
@@ -161,7 +162,8 @@ class Lattice :
         y_max : int = self._dimension.y
         z_max : int = self._dimension.z
         grid_size : int = x_max * y_max * z_max
-        host_layers : int = int(grid_size * self._proportions.host) // (x_max * y_max)
+        host_layers : int = int(grid_size * self._proportions.host) // (x_max * y_max)  
+        # host_layers //= 2
         if host_layers%2 :
             host_layers -= 1
         elif host_layers > 0 :
@@ -451,6 +453,9 @@ class Lattice :
     def _remove_ISC_event(self, event : Event) -> None :
         self._exciton_events.remove(event)
 
+    def _remove_reinjection_event(self, event : Event) -> None :
+        self._exciton_events.remove(event)
+
 
 
     ############################################################################
@@ -538,6 +543,10 @@ class Lattice :
         event = Event(position, position, self._time_fluorophore_decay(spin), EVENTS["decay"], PARTICULES["exciton"])
         self._exciton_events.append(event)
 
+    def _new_reinjection_event(self, position : Point) -> None :
+        event = Event(position, position, 0., EVENTS["injection"], PARTICULES["exciton"])
+        self._exciton_events.append(event)
+
 
 
     ##############################################
@@ -594,7 +603,7 @@ class Lattice :
         self._electrons_locations.append(self._seed.choice(positions))
         position = self._electrons_locations[-1]
         self._grid[position.z][position.y][position.x].switch_electron()
-        self._injection += 1
+        self._injected_electrons += 1
 
     def _hole_reinjection(self) -> None :
         """Inject a new hole after an electronic capture or a recombination.
@@ -608,7 +617,7 @@ class Lattice :
         self._holes_locations.append(self._seed.choice(positions))
         position = self._holes_locations[-1]
         self._grid[position.z][position.y][position.x].switch_hole()
-        self._injection += 1
+        self._injected_holes += 1
 
     def _decay(self, position : Point) -> None :
         """Decay of excitons on both each molecule.
@@ -718,15 +727,16 @@ class Lattice :
             self._FRET(event.initial)
             self._remove_decay_event(event)
             self._update_events(event.tau)
-            self._electron_reinjection()
-            self._new_move_electron_event(self._electrons_locations[-1])
-            self._hole_reinjection()
-            self._new_move_hole_event(self._holes_locations[-1])
+            self._new_reinjection_event(event.initial)
         #   Traite les événements de type recombinaison
         elif event.kind == EVENTS["decay"] :
             self._decay(event.initial)
             self._remove_decay_event(event)
             self._update_events(event.tau)
+            self._new_reinjection_event(event.final)
+        #   Traite les événements de type (re)injection de charges
+        elif event.kind == EVENTS["injection"] :
+            self._remove_reinjection_event(event)
             self._electron_reinjection()
             self._new_move_electron_event(self._electrons_locations[-1])
             self._hole_reinjection()
@@ -753,7 +763,7 @@ class Lattice :
         for event in self._exciton_events :
             event.tau -= time
 
-    def operations(self, recombinations : int, stop : int = 10**7) -> None :
+    def operations(self, recombinations : int, stop : int = 10**6) -> None :
         count : int = 0
         while self._recombination < recombinations :
             count += 1
@@ -763,17 +773,22 @@ class Lattice :
             running = self._first_reaction_method()
             if not running :
                 print("No more events left.\n", "Stopping process...")
-                self._IQE = 100. * 2. * float(self._emission) / float(self._injection)
                 return 
             if time > self._time :
                 print("Negative time occured.\n", "Stopping process...")
                 return
             if count == stop :
                 print("Occurrence limit reached.\n", "Stopping process...")
-                self._IQE = 100. * 2. * float(self._emission) / float(self._injection)
+                print(self._cache)
                 return
         print("Recquired amount of recombinations reached.\n", "Stopping process...") 
-        self._IQE = 100. * 2. * float(self._emission) / float(self._injection)
+        self._update_IQE()
+
+    def _update_IQE(self) -> None:
+        if self._recombination > 0 :
+            charges_ratio : float = min(self._injected_holes / self._injected_electrons, self._injected_electrons / self._injected_holes)
+            emission_ratio : float = self._emission / self._recombination
+            self._IQE = 100. * charges_ratio * emission_ratio
     
 
 

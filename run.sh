@@ -6,18 +6,18 @@
 module load releases/2022a
 module load Python/3.10.4-GCCcore-11.3.0
 
-name = "CMAES"
-job_type = $1
+name="CMAES"
+job_type=$1
 
-declare -i supervisor_id = $2
-declare -i nmax = 101
-declare -i npop = 20
+declare -i supervisor_id=$2
+declare -i nmax=20
+declare -i npop=30
 
-supervisor_time = "00:10:00"
-declare -i supervisor_mem = 2048
+supervisor_time="00:10:00"
+declare -i supervisor_mem=2048
 
-worker_time = "04:00:00"
-declare -i worker_mem = 2048
+worker_time="04:00:00"
+declare -i worker_mem=2048
 
 function supervisor {
     echo "I'm the supervisor #${supervisor_id} !"
@@ -58,20 +58,20 @@ function job {
             exit 0
         fi
         # Submit a generation of workers
-        out = $(sbatch --time=${worker_time} --mem-per-cpu=${worker_mem} --job-name=${name}_${supervisor_id} --array=1-${npop} $0 w ${supervisor_id})
-        exit_code = $?
+        out=$(sbatch --time=${worker_time} --mem-per-cpu=${worker_mem} --job-name=${name}_${supervisor_id} --array=1-${npop} $0 w ${supervisor_id})
+        exit_code=$?
         if [ "$exit_code" -ne "0" ]; then
             exit 1
         fi
         # Submit next supervisor when done with workers
-        tmp = ${out#*Submitted batch job }
-        job_id = ${tmp% on cluster hercules2*}
+        tmp=${out#*Submitted batch job }
+        job_id=${tmp% on cluster hercules2*}
         printf -v dependency ":"$job_id"_%i" $(seq 1 $npop)      
-        out = $(sbatch --time=${supervisor_time} --mem-per-cpu=${supervisor_mem} --job-name=${name}_$(( supervisor_id + 1 )) --output=job_$(( supervisor_id + 1 )).out --dependency=afterok${dependency} $0 s $(( supervisor_id + 1 )))
+        out=$(sbatch --time=${supervisor_time} --mem-per-cpu=${supervisor_mem} --job-name=${name}_$(( supervisor_id + 1 )) --output=job_$(( supervisor_id + 1 )).out --dependency=afterok${dependency} $0 s $(( supervisor_id + 1 )))
         exit 0
     # Deals with a worker
     elif [ $job_type == "w" ]; then
-        worker_id = ${SLURM_ARRAY_TASK_ID}
+        worker_id=${SLURM_ARRAY_TASK_ID}
         worker
         exit 0
     # Stops if neither a supervisor nor a worker was submitted

@@ -12,17 +12,13 @@ def main() -> int :
     source : Path = cwd()
     try :
         with open(source.joinpath(FILES["in"])) as file :
-            proportions : list = json.load(file)
+            input : list = json.load(file)
+        proportions = (1. - sum(input), *input)
     except FileNotFoundError :
         return 1
-    try :
-        oled : Lattice = Lattice(proportions)
-    except IndexError :
-        return 2
-    except ValueError :
-        return 3
+    oled : Lattice = Lattice(proportions)
     value = IQE(oled)
-    with open(source.joinpath("out.txt"), "w") as file :
+    with open(source.joinpath(FILES["out"]), "w") as file :
         json.dump(value, file)
     return 0
 
@@ -34,10 +30,6 @@ def errors(value : int) -> None :
     prompt_message : str = ""
     if value == 1 :
         prompt_message += "FileNotFoundError encountered when trying to read in.txt."
-    elif value == 2 :
-        prompt_message += "IndexError encountered when trying to create a Lattice object."
-    elif value == 3 :
-        prompt_message += "ValueError encountered when trying to create a Lattice object."
     with open(source.joinpath("errors.txt"), "w") as file :
         file.write(prompt_message)
 
@@ -45,7 +37,7 @@ def cwd() -> Path :
     return Path(__file__).parent
 
 def IQE(lattice : Lattice) -> float :
-    recombinations : int = 10**3
+    recombinations : int = 10**0
     lattice.operations(recombinations)
     return 100. - lattice.get_IQE()
 
