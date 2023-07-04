@@ -10,13 +10,13 @@ name="CMAES"
 job_type=$1
 
 declare -i supervisor_id=$2
-declare -i nmax=20
-declare -i npop=30
+declare -i nmax=101
+declare -i npop=20
 
 supervisor_time="00:10:00"
 declare -i supervisor_mem=2048
 
-worker_time="04:00:00"
+worker_time="06:00:00"
 declare -i worker_mem=2048
 
 function supervisor {

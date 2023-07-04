@@ -37,7 +37,7 @@ def cwd() -> Path :
     return Path(__file__).parent
 
 def IQE(lattice : Lattice) -> float :
-    recombinations : int = 10**0
+    recombinations : int = 10**1
     lattice.operations(recombinations)
     return 100. - lattice.get_IQE()
 

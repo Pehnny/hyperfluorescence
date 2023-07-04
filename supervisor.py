@@ -10,6 +10,7 @@ from cma import CMAEvolutionStrategy as CMAES
 from pathlib import Path
 from shutil import copy
 import json
+from numpy import ndarray, int64, float64
 
 
 
@@ -18,7 +19,7 @@ FILES = {
     "out" : "out.json",
     "solver" : "solver.pkl",
     "par" : "CMAES.json",
-    "history" : "history.txt"
+    "history" : "history.json"
 }
 
 def supervisor(id_number : int) -> None :
@@ -51,12 +52,9 @@ def supervisor(id_number : int) -> None :
         with open(solver_file, "wb") as file :
             file.write(solver.pickle_dumps())
         # Creates history
-        try :
-            with open(history, "x") as file :
-                ...
-        except FileExistsError :
-            with open(history, "w") as file :
-                file.write("")
+        result : dict = dict()
+        with open(history, "w") as file :
+            json.dump(result, file)
         print(f"Supervisor {id_number} did its job.") 
     # Deals with next supervisors
     elif 2 <= id_number <= parameters["generation"] :
@@ -84,16 +82,16 @@ def supervisor(id_number : int) -> None :
         for worker in workers :
             worker.joinpath(FILES["out"]).unlink()
         # Saves history
-        xbest : list = list(solver.result.xbest)
-        fbest : float = float(solver.result.fbest)
-        values : list = [str(x) for x in xbest] + [str(fbest), "\n"]
-        print(values)
-        with open(history, "a") as file :
-            file.write(str("\t").join(values))
+        update : dict = {f"gen_{id_number-1}" : convert(solver.result._asdict())}
+        with open(history) as file :
+            result = json.load(file)
+        result |= update
+        with open(history, "w") as file :
+            json.dump(result, file, sort_keys = True, indent = 4)
         # Generates a new generation
         if solver.stop() :
             home.joinpath("STOP").touch()
-            print(f"Solver excited early.")
+            print(f"Solver excited early. {solver.stop()}")
             return
         population : list = solver.ask(parameters["population"])
         for n, worker in enumerate(workers) :
@@ -106,7 +104,8 @@ def supervisor(id_number : int) -> None :
         print(f"Supervisor {id_number} did its job.")
     # Deals with the last supervisor
     elif id_number > parameters["generation"] :
-         # Gets the inputs and outputs from the last generation
+        home.joinpath("STOP").touch()
+        # Gets the inputs and outputs from the last generation
         previous_population : list = []
         fitness : list = []
         for n, worker in enumerate(workers) :
@@ -127,18 +126,17 @@ def supervisor(id_number : int) -> None :
             solver : CMAES = pickle.load(file)
         solver.tell(previous_population, fitness)
         # Saves history
-        xbest : list = list(solver.result.xbest)
-        fbest : float = float(solver.result.fbest)
-        values : list = [str(x) for x in xbest] + [str(fbest), "\n"]
-        with open(history, "a") as file :
-            file.write(str("\t").join(values))
+        # Saves history
+        update : dict = {f"gen_{id_number-1}" : convert(solver.result._asdict())}
+        with open(history) as file :
+            result = json.load(file)
+        result |= update
+        with open(history, "w") as file :
+            json.dump(result, file, sort_keys = True, indent = 4)
         # Cleans workers
         for worker in workers :
-            for file in worker.iterdir() :
-                file.unlink()
-            worker.rmdir()
+            clean_worker(worker)
         # Stops CMAES
-        home.joinpath("STOP").touch()
         print(f"Supervisor {id_number} finished the job.")
         print(f"All workers were cleared. Results should be stored in {history}")
     else :
@@ -147,3 +145,22 @@ def supervisor(id_number : int) -> None :
 
 def cwd() -> Path :
     return Path(__file__).parent
+
+def convert(result : dict) -> dict :
+    for key in result.keys() :
+        if isinstance(result[key], ndarray) :
+            result[key] = list(result[key])
+        elif isinstance(result[key], int64) :
+            result[key] = int(result[key])
+        elif isinstance(result[key], float64) :
+            result[key] = float(result[key])
+    if "stop" in result :
+        result["stop"] = dict(result["stop"])
+    return result
+
+def clean_worker(worker : Path) -> None :
+    for path in worker.iterdir() :
+        if path.is_file() :
+            path.unlink()
+        elif path.is_dir() :
+            clean_worker(path)

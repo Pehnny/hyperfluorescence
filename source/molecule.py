@@ -276,7 +276,7 @@ class TADF(Molecule) :
     def __init__(self, position : Point,
                  neighbours : list[Point], homo_energy : float = 5.8,
                  lumo_energy : float = -2.6, s1_energy : float = 2.55,
-                 t1_energy : float = 2.52, standard_deviation : float = 0.1) -> None :
+                 t1_energy : float = 2.52, standard_deviation : float = 0.3) -> None :
         """Initialise l'instance de la classe TADF.
 
         Les valeurs part défaut correspondent à la molécule ACRSA

@@ -1,6 +1,6 @@
 {
-    "generation" : 10,
-    "population" : 30,
+    "generation" : 5,
+    "population" : 20,
     "sigma" : 0.01,
     "initial" : [
         0.15, 0.0225

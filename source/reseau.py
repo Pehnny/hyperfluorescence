@@ -109,7 +109,7 @@ class Lattice :
     def __init__(self, proportions : tuple[float,float,float], dimension : tuple[int,int,int] = (20, 20, 20),
                  electric_field : float = 10.**(-1), charges : int = 4, charge_tranfer_distance : int = 1,
                  cutoff_radius : float = 19.2, architecture : str = NotImplemented) -> None :
-        self._init_raises(dimension, proportions, charge_tranfer_distance)
+        self._init_raises(proportions, dimension, charge_tranfer_distance)
         self._seed : Random = Random()
         self._lattice_parameters_creation(proportions, dimension, electric_field, charges, cutoff_radius)
         self._grid : list[list[list[Host | TADF | Fluorophore]]] = self._lattice_creation(charge_tranfer_distance)
@@ -124,7 +124,7 @@ class Lattice :
         self._time : float = 0.
         self._cache : deque[Event] = deque((None for i in range(10)), 10)
 
-    def _init_raises(self, dimension : tuple[int, int, int], proportions : tuple[float, float, float],
+    def _init_raises(self, proportions : tuple[float, float, float], dimension : tuple[int, int, int],
                      distance : int) -> None :
         if distance >= min(dimension) :
             raise ValueError(f"Expected charge_transfer_distance to be lower than all 3 dimensions, got {distance}.")
@@ -162,12 +162,14 @@ class Lattice :
         y_max : int = self._dimension.y
         z_max : int = self._dimension.z
         grid_size : int = x_max * y_max * z_max
-        host_layers : int = int(grid_size * self._proportions.host) // (x_max * y_max)  
-        # host_layers //= 2
-        if host_layers%2 :
-            host_layers -= 1
-        elif host_layers > 0 :
-            host_layers -= 2
+        host_layers : int = (grid_size * self._proportions.host) // (x_max * y_max)
+        remain : int = (grid_size * self._proportions.host) % (x_max * y_max)
+        if host_layers == 2 and remain < 2 :
+            host_layers = 0
+        elif host_layers < 2 :
+            host_layers = 0
+        else :
+            host_layers = 2
         n_tadf : int = round(grid_size * self._proportions.tadf)
         n_fluo : int = round(grid_size * self._proportions.fluo)
         n_host : int = grid_size - host_layers * x_max * y_max - n_tadf - n_fluo
@@ -719,7 +721,7 @@ class Lattice :
             decay_events : list[Event] = [
                     self._new_TADF_decay_event(event.final, molecule.exciton),
                     self._new_TADF_FRET_event(event.final, molecule.exciton),
-                    self._new_TADF_ISC_event(event.final, molecule.exciton)
+                    # self._new_TADF_ISC_event(event.final, molecule.exciton)
             ]
             self._new_TADF_event(min(decay_events))
         #   Traite les événements de type transfert d'énergie de Forster
