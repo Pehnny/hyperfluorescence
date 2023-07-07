@@ -107,7 +107,7 @@ class Lattice :
     ####____Méthodes de démarrage du réseau____####
     ###############################################
     def __init__(self, proportions : tuple[float,float,float], dimension : tuple[int,int,int] = (20, 20, 20),
-                 electric_field : float = 10.**(-1), charges : int = 4, charge_tranfer_distance : int = 1,
+                 electric_field : float = 10.**(-1), charges : int = 8, charge_tranfer_distance : int = 1,
                  cutoff_radius : float = 19.2, architecture : str = NotImplemented) -> None :
         self._init_raises(proportions, dimension, charge_tranfer_distance)
         self._seed : Random = Random()
@@ -115,8 +115,8 @@ class Lattice :
         self._grid : list[list[list[Host | TADF | Fluorophore]]] = self._lattice_creation(charge_tranfer_distance)
         self._charges_injection()
         self._events_creation()
-        self._injected_electrons : int = charges
-        self._injected_holes : int = charges
+        self._injected_electrons : int = 0
+        self._injected_holes : int = 0
         self._emission : int = 0
         self._recombination : int = 0
         self._IQE : float = 0.
@@ -145,8 +145,8 @@ class Lattice :
     def _lattice_parameters_creation(self, proportions : tuple[float,float,float], dimension : tuple[int,int,int],
                                      electric_field : float, charges : int, cutoff_radius : float) -> None :
         if sum(proportions) != 1. :
-            norm = sum(dimension)
-            proportions = (dimension[0] / norm, dimension[1] / norm, dimension[2] / norm)
+            norm = sum(proportions)
+            proportions = (proportions[0] / norm, proportions[1] / norm, proportions[2] / norm)
         self._dimension : Point = Point(*dimension)
         self._proportions : Proportion = Proportion(*proportions)
         self._electric_field : Vector = Vector(0, 0, electric_field)    # [eV/nm]
@@ -162,11 +162,11 @@ class Lattice :
         y_max : int = self._dimension.y
         z_max : int = self._dimension.z
         grid_size : int = x_max * y_max * z_max
-        host_layers : int = (grid_size * self._proportions.host) // (x_max * y_max)
-        remain : int = (grid_size * self._proportions.host) % (x_max * y_max)
-        if host_layers == 2 and remain < 2 :
+        max_host_layers : int = int(grid_size * self._proportions.host // (x_max * y_max))
+        remain : int = int(grid_size * self._proportions.host % (x_max * y_max))
+        if max_host_layers == 2 and remain < 2 :
             host_layers = 0
-        elif host_layers < 2 :
+        elif max_host_layers < 2 :
             host_layers = 0
         else :
             host_layers = 2
@@ -363,14 +363,10 @@ class Lattice :
         else : 
             return 1. / distance - 1. / self._cutoff
     
-    def _time_FRET(self, initial : Point, final : Point,
-                   spin : int) -> float :
+    def _time_FRET(self, initial : Point, final : Point) -> float :
         distance : float = ((final - initial) * self._lattice_constant).norm()
         rng : float = 1. - self._seed.random()
-        if spin == EXCITON["triplet"] :
-            transfer_rate : float = (TRANSFER_RADIUS["TTS"] / distance)**6 * TRANSFER_RATES["ACRSA_F"]
-        elif spin == EXCITON["singlet"] :
-            transfer_rate : float = (TRANSFER_RADIUS["STS"] / distance)**6 * TRANSFER_RATES["ACRSA_F"]
+        transfer_rate : float = (TRANSFER_RADIUS["STS"] / distance)**6 * TRANSFER_RATES["ACRSA_F"]
         return - log(rng) / transfer_rate
         
     def _time_ISC(self, position : Point, spin : int) -> float :
@@ -443,6 +439,9 @@ class Lattice :
     def _remove_bound_event(self, event : Event) -> None :
         self._exciton_events.remove(event)
 
+    def _remove_FRET_event(self, event : Event) -> None :
+        self._exciton_events.remove(event)
+
     def _remove_decay_event(self, event : Event) -> None :
         self._exciton_events.remove(event)
 
@@ -453,9 +452,6 @@ class Lattice :
         self._hole_events.remove(event)
 
     def _remove_ISC_event(self, event : Event) -> None :
-        self._exciton_events.remove(event)
-
-    def _remove_reinjection_event(self, event : Event) -> None :
         self._exciton_events.remove(event)
 
 
@@ -482,7 +478,7 @@ class Lattice :
         self._hole_events.append(min(events))
 
     def _new_bound_event(self, position : Point) -> None :
-        event = Event(position, position, self._time_host_decay(), EVENTS["bound"], PARTICULES["exciton"])
+        event = Event(position, position, 0., EVENTS["bound"], PARTICULES["exciton"])
         self._exciton_events.append(event)
 
     def _new_capture_electron_event(self, position : Point) -> None :
@@ -494,7 +490,7 @@ class Lattice :
         self._hole_events.append(event)
 
     def _new_host_decay_event(self, position : Point) -> None :
-        event = Event(position, position, 0., EVENTS["decay"], PARTICULES["exciton"])
+        event = Event(position, position, self._time_host_decay(), EVENTS["decay"], PARTICULES["exciton"])
         self._exciton_events.append(event)
 
     def _new_TADF_ISC_event(self, position : Point, spin : int) -> Event :
@@ -514,7 +510,7 @@ class Lattice :
         event = Event(position, position, self._time_TADF_decay(spin), EVENTS["decay"], PARTICULES["exciton"])
         return event
 
-    def _new_TADF_FRET_event(self, position : Point, spin : int) -> Event :
+    def _new_TADF_FRET_event(self, position : Point) -> Event :
         """Create a new Forster resonance energy transfer (FRET) event.
 
         It evaluates every FRET from a TADF to the emitters and keep the fastest.
@@ -522,7 +518,7 @@ class Lattice :
         and allows the first reaction method to work faster.
         """
         events = [
-            Event(position, transfer, self._time_FRET(position, transfer, spin), EVENTS["Forster"], PARTICULES["exciton"])
+            Event(position, transfer, self._time_FRET(position, transfer), EVENTS["Forster"], PARTICULES["exciton"])
             for transfer in self._fluorophores_locations
         ]
         event : Event = min(list(events))
@@ -543,10 +539,6 @@ class Lattice :
         Occurs when an exciton is formed on a fluorophone.
         """
         event = Event(position, position, self._time_fluorophore_decay(spin), EVENTS["decay"], PARTICULES["exciton"])
-        self._exciton_events.append(event)
-
-    def _new_reinjection_event(self, position : Point) -> None :
-        event = Event(position, position, 0., EVENTS["injection"], PARTICULES["exciton"])
         self._exciton_events.append(event)
 
 
@@ -658,8 +650,10 @@ class Lattice :
         #   Vérifie si il reste un événement et récupère le plus rapide
         events : list[Event] = self._get_all_events()
         events.sort(reverse = True)
-        try : event = events.pop()
-        except IndexError : return False
+        try : 
+            event = events.pop()
+        except IndexError : 
+            return False
         self._cache.popleft()
         self._cache.append(event)
         #   Traite les événements de type "move"
@@ -667,38 +661,35 @@ class Lattice :
             #   Traite le cas d'un électron
             if event.particule == PARTICULES["electron"] :
                 self._move_electron(event.initial, event.final)
+                self._update_events(event.tau)
                 self._remove_move_electron_events(event)
                 molecule = self._get_molecule(event.final)
                 if not molecule.hole and event.final.z != 0 :
-                    self._update_events(event.tau)
                     self._new_move_electron_event(event.final)
                 elif molecule.hole :
                     event = Event(event.final, event.final, 0., EVENTS["move"], PARTICULES["hole"])
                     self._remove_move_hole_events(event)
-                    self._update_events(event.tau)
                     self._new_bound_event(event.final)
                 elif event.final.z == 0 :
-                    self._update_events(event.tau)
                     self._new_capture_electron_event(event.final)
             #   Traite le cas d'un trou
             elif event.particule == PARTICULES["hole"] :
                 self._move_hole(event.initial, event.final)
+                self._update_events(event.tau)
                 self._remove_move_hole_events(event)
                 molecule = self._get_molecule(event.final)
                 if not molecule.electron and event.final.z != (self._dimension.z - 1) :
-                    self._update_events(event.tau)
                     self._new_move_hole_event(event.final)
                 elif molecule.electron :
                     event = Event(event.final, event.final, 0., EVENTS["move"], PARTICULES["electron"])
                     self._remove_move_electron_events(event)
-                    self._update_events(event.tau)
                     self._new_bound_event(event.final)
                 elif event.final.z == (self._dimension.z - 1) :
-                    self._update_events(event.tau)
                     self._new_capture_hole_event(event.final)
         #   Traite les événements de type formation d'exciton
         elif event.kind == EVENTS["bound"] :
             self._form_exciton(event.final)
+            # self._update_events(event.tau)    # always 0.
             self._remove_bound_event(event)
             molecule = self._get_molecule(event.final)
             if isinstance(molecule, Host) :
@@ -706,58 +697,70 @@ class Lattice :
             elif isinstance(molecule, TADF) :
                 TADF_events : list[Event] = [
                     self._new_TADF_decay_event(event.final, molecule.exciton),
-                    self._new_TADF_FRET_event(event.final, molecule.exciton),
                     self._new_TADF_ISC_event(event.final, molecule.exciton)
                 ]
+                if molecule.exciton == EXCITON["singlet"] :
+                    TADF_events.append(
+                        self._new_TADF_FRET_event(event.final)
+                    )
                 self._new_TADF_event(min(TADF_events))
             elif isinstance(molecule, Fluorophore) :
                 self._new_fluorophore_decay_event(event.final, molecule.exciton)
         #   Traite les événements de type conversion intersystème
         elif event.kind == EVENTS["ISC"] :
-            self._intersystem_crossing(event.initial)
-            self._remove_ISC_event(event)
+            self._intersystem_crossing(event.final)
             self._update_events(event.tau)
+            self._remove_ISC_event(event)
             molecule = self._get_molecule(event.final)
-            decay_events : list[Event] = [
+            TADF_events : list[Event] = [
                     self._new_TADF_decay_event(event.final, molecule.exciton),
-                    self._new_TADF_FRET_event(event.final, molecule.exciton),
-                    # self._new_TADF_ISC_event(event.final, molecule.exciton)
+                    self._new_TADF_ISC_event(event.final, molecule.exciton)
             ]
-            self._new_TADF_event(min(decay_events))
+            if molecule.exciton == EXCITON["singlet"] :
+                    TADF_events.append(
+                        self._new_TADF_FRET_event(event.final)
+                    )
+            self._new_TADF_event(min(TADF_events))
         #   Traite les événements de type transfert d'énergie de Forster
         elif event.kind == EVENTS["Forster"] :
             self._FRET(event.initial)
-            self._remove_decay_event(event)
             self._update_events(event.tau)
-            self._new_reinjection_event(event.initial)
+            self._remove_FRET_event(event)
+            self._electron_reinjection()
+            self._hole_reinjection()
+            self._new_move_electron_event(self._electrons_locations[-1])
+            self._new_move_hole_event(self._holes_locations[-1])
         #   Traite les événements de type recombinaison
         elif event.kind == EVENTS["decay"] :
             self._decay(event.initial)
-            self._remove_decay_event(event)
             self._update_events(event.tau)
-            self._new_reinjection_event(event.final)
-        #   Traite les événements de type (re)injection de charges
-        elif event.kind == EVENTS["injection"] :
-            self._remove_reinjection_event(event)
+            self._remove_decay_event(event)
             self._electron_reinjection()
-            self._new_move_electron_event(self._electrons_locations[-1])
             self._hole_reinjection()
+            self._new_move_electron_event(self._electrons_locations[-1])
             self._new_move_hole_event(self._holes_locations[-1])
         #   Traite les événements de type séparation d'exciton :
         elif event.kind == EVENTS["capture"] :
             if event.particule == PARTICULES["electron"] :
                 self._capture_electron(event.final)
+                # self._update_events(event.tau)    # always 0.
                 self._remove_capture_electron_event(event)
                 self._electron_reinjection()
+                self._hole_reinjection()
                 self._new_move_electron_event(self._electrons_locations[-1])
+                self._new_move_hole_event(self._holes_locations[-1])
             elif event.particule == PARTICULES["hole"] :
                 self._capture_hole(event.final)
+                # self._update_events(event.tau)    # always 0.
                 self._remove_capture_hole_event(event)
+                self._electron_reinjection()
                 self._hole_reinjection()
+                self._new_move_electron_event(self._electrons_locations[-1])
                 self._new_move_hole_event(self._holes_locations[-1])
         return True
     
     def _update_events(self, time : float) -> None :
+        self._time += time
         for event in self._electron_events :
             event.tau -= time
         for event in self._hole_events :
@@ -765,31 +768,32 @@ class Lattice :
         for event in self._exciton_events :
             event.tau -= time
 
-    def operations(self, recombinations : int, stop : int = 10**6) -> None :
-        count : int = 0
+    def operations(self, recombinations : int, stop : int = 10**7) -> None :
+        init_step : int = self._step
         while self._recombination < recombinations :
-            count += 1
             self._step += 1
-            time = self._time
-            #   Exécute l'évenement suivant et s'assure que le temps n'a pas diminué.
+            # time = self._time
+            #   Exécute l'évenement suivant.
             running = self._first_reaction_method()
             if not running :
                 print("No more events left.\n", "Stopping process...")
                 return 
-            if time > self._time :
-                print("Negative time occured.\n", "Stopping process...")
-                return
-            if count == stop :
+            # if time > self._time :
+            #     print("Negative time encountered.\n", "Stopping process...")
+            #     print(self._cache)
+            #     return
+            if self._step == init_step + stop :
+                self._update_IQE()
                 print("Occurrence limit reached.\n", "Stopping process...")
                 print(self._cache)
                 return
-        print("Recquired amount of recombinations reached.\n", "Stopping process...") 
         self._update_IQE()
-
+        print("Recquired amount of recombinations reached.\n", "Stopping process...") 
+        
     def _update_IQE(self) -> None:
         if self._recombination > 0 :
             charges_ratio : float = min(self._injected_holes / self._injected_electrons, self._injected_electrons / self._injected_holes)
-            emission_ratio : float = self._emission / self._recombination
+            emission_ratio : float = self._emission / self._injected_electrons
             self._IQE = 100. * charges_ratio * emission_ratio
     
 
@@ -818,3 +822,6 @@ class Lattice :
     
     def get_dimensions(self) -> tuple[int, int, int] :
         return self._dimension.x, self._dimension.y, self._dimension.z
+    
+    def get_time(self) -> float :
+        return self._time

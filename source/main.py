@@ -16,8 +16,7 @@ def main() -> int :
         proportions = (1. - sum(input), *input)
     except FileNotFoundError :
         return 1
-    oled : Lattice = Lattice(proportions)
-    value = IQE(oled)
+    value = IQE(proportions)
     with open(source.joinpath(FILES["out"]), "w") as file :
         json.dump(value, file)
     return 0
@@ -36,10 +35,11 @@ def errors(value : int) -> None :
 def cwd() -> Path :
     return Path(__file__).parent
 
-def IQE(lattice : Lattice) -> float :
+def IQE(proportions : tuple) -> float :
+    oled = Lattice(proportions)
     recombinations : int = 10**1
-    lattice.operations(recombinations)
-    return 100. - lattice.get_IQE()
+    oled.operations(recombinations)
+    return 100. - oled.get_IQE()
 
 
 

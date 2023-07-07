@@ -1,9 +1,9 @@
 {
-    "generation" : 5,
-    "population" : 20,
+    "generation" : 50,
+    "population" : 50,
     "sigma" : 0.01,
     "initial" : [
-        0.15, 0.0225
+        0.15, 0.01
     ],
     "options" : {
         "bounds" : [

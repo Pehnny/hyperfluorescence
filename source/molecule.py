@@ -25,7 +25,7 @@ EXCITON : dict[str, int] = {
 #   Transfer rates for different quantum mechanism [Hz].
 #   NR : (triplet/singlet) non-radiative, F : fluorescence, PH : phosphorescence
 TRANSFER_RATES : dict[str, float] = {
-    "charges" : 10.**13,
+    "charges" : 10.**15,
     "DPEPO_NR" : inf,
     "ACRSA_F" : 4.58 * 10.**6,
     "ACRSA_PH" : 4.19 * 10.**6,
@@ -45,6 +45,8 @@ SOC : dict[str, float] = {
     "ISC" : 10.**8,
     "RISC" : 10.**5
 }
+
+
 
 class Molecule :
     """Classe représentant une Molécule organique générique.
@@ -128,6 +130,7 @@ class Molecule :
         """Méthode représentant la recombinaison d'un exciton, avec ou sans émission.
         """
         raise NotImplementedError(f"{self.exciton_decay.__name__} is not implemented.")
+
 
 
 class Fluorophore(Molecule) :
@@ -223,6 +226,7 @@ class Fluorophore(Molecule) :
             return state == EXCITON["singlet"]
 
 
+
 class TADF(Molecule) :
     """Classe représentant une molécule TADF S1. Hérite de la classe Molecule.
 
@@ -276,7 +280,7 @@ class TADF(Molecule) :
     def __init__(self, position : Point,
                  neighbours : list[Point], homo_energy : float = 5.8,
                  lumo_energy : float = -2.6, s1_energy : float = 2.55,
-                 t1_energy : float = 2.52, standard_deviation : float = 0.3) -> None :
+                 t1_energy : float = 2.52, standard_deviation : float = 0.1) -> None :
         """Initialise l'instance de la classe TADF.
 
         Les valeurs part défaut correspondent à la molécule ACRSA
@@ -314,11 +318,10 @@ class TADF(Molecule) :
         """
 
         if self.exciton :
-            state = self.exciton
             self.exciton = EXCITON["none"]
             self.electron = False
             self.hole = False
-            return state == EXCITON["triplet"] or state == EXCITON["singlet"]
+            return False
         
     def intersystem_crossing(self) -> None :
         """Converti l'état de spin de l'exciton.
@@ -329,6 +332,7 @@ class TADF(Molecule) :
             self.exciton = EXCITON["triplet"]
         elif self.exciton == EXCITON["triplet"] :
             self.exciton = EXCITON["singlet"]
+
 
 
 class Host(Molecule) :
