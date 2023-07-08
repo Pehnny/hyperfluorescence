@@ -1,0 +1,14 @@
+{
+    "generation" : 50,
+    "population" : 50,
+    "sigma" : 0.01,
+    "initial" : [
+        0.15, 0.01
+    ],
+    "options" : {
+        "bounds" : [
+            [0.10, 0.005],
+            [0.20, 0.05]
+        ]
+    }
+}
