@@ -170,4 +170,3 @@ class Event :
         if isinstance(other, Event) :
             return self.tau >= other.tau
         raise TypeError(f"other must be of type event, got {type(other)}")
-    

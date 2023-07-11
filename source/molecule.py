@@ -28,7 +28,7 @@ TRANSFER_RATES : dict[str, float] = {
     "charges" : 10.**15,
     "DPEPO_NR" : inf,
     "ACRSA_F" : 4.58 * 10.**6,
-    "ACRSA_PH" : 4.19 * 10.**6,
+    "ACRSA_PH" : 4.19 * 10.**3,
     "TBPe_F" : inf,
     "TBPe_NR" : inf
 }
@@ -42,8 +42,8 @@ TRANSFER_RADIUS : dict[str, float] = {
 
 #   Spin Orbit Coupling amplitudes for ACRSA based on known values of ISC rates.
 SOC : dict[str, float] = {
-    "ISC" : 10.**8,
-    "RISC" : 10.**5
+    "ISC" : 9.75 * 10.**8,
+    "RISC" : 4.83 * 10**4
 }
 
 
