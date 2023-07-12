@@ -23,27 +23,27 @@ EXCITON : dict[str, int] = {
 }
 
 #   Transfer rates for different quantum mechanism [Hz].
-#   NR : (triplet/singlet) non-radiative, F : fluorescence, PH : phosphorescence
+#   (S/T)NR : (triplet/singlet) non-radiative, F : fluorescence, PH : phosphorescence
 TRANSFER_RATES : dict[str, float] = {
-    "charges" : 10.**15,
-    "DPEPO_NR" : inf,
+    "charges" : 10.**13,
+    "DPEPO_SNR" : 10.**6,
+    "DPEPO_TNR" : 10.**4,
     "ACRSA_F" : 4.58 * 10.**6,
+    "ACRSA_SNR" : 10.**4,
     "ACRSA_PH" : 4.19 * 10.**3,
-    "TBPe_F" : inf,
-    "TBPe_NR" : inf
+    "ACRSA_TNR" : 10.**1,
+    "ACRSA_ISC" : 10.**6,
+    "TBPe_F" : 2. * 10.**8,
+    "TBPe_SNR" : 10.**6,
+    "TBPe_PH" : 10**2,
+    "TBPe_TNR" : 10.**4,
 }
 
 #   Förster energy transfer radius for ACRSA -> TBPe [nm].
-#   STS : singlet to singlet, TTS : triplet to singlet.
+#   FRET : Forster Resonnance Energy Transfer, DET : Dexter Energy Transfer.
 TRANSFER_RADIUS : dict[str, float] = {
-    "STS" : 5.55,
-    "TTS" : 4.75
-}
-
-#   Spin Orbit Coupling amplitudes for ACRSA based on known values of ISC rates.
-SOC : dict[str, float] = {
-    "ISC" : 9.75 * 10.**8,
-    "RISC" : 4.83 * 10**4
+    "FRET" : 5.55,
+    "DET" : 0.3,
 }
 
 
@@ -307,6 +307,7 @@ class TADF(Molecule) :
         self.lumo_energy : float = self.seed.gauss(lumo_energy, standard_deviation)
         self.s1_energy : float = self.seed.gauss(s1_energy, standard_deviation)
         self.t1_energy : float = self.seed.gauss(t1_energy, standard_deviation)
+        self.delta_energy : float = s1_energy - t1_energy
 
     def exciton_decay(self) -> bool:
         """Méthode représentant la recombinaison d'un exciton, avec ou sans émission.
