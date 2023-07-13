@@ -47,6 +47,7 @@ EVENTS : dict[str, int] = {
     "ET" : 4,
     "decay" : 5,
     "capture" : 6,
+    "unbound" : 7
 }
 
 PARTICULES : dict[str, int] = {

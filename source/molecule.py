@@ -22,8 +22,9 @@ EXCITON : dict[str, int] = {
     "triplet" : 3
 }
 
-#   Transfer rates for different quantum mechanism [Hz].
-#   (S/T)NR : (triplet/singlet) non-radiative, F : fluorescence, PH : phosphorescence
+#   Transfer rates for different quantum mechanism [Hz] :
+#   (S/T)NR : (singlet/triplet) non-radiative, F : fluorescence,
+#   PH : phosphorescence, ISC : intersystem crossing
 TRANSFER_RATES : dict[str, float] = {
     "charges" : 10.**13,
     "DPEPO_SNR" : 10.**6,
@@ -36,14 +37,20 @@ TRANSFER_RATES : dict[str, float] = {
     "TBPe_F" : 2. * 10.**8,
     "TBPe_SNR" : 10.**6,
     "TBPe_PH" : 10**2,
-    "TBPe_TNR" : 10.**4,
+    "TBPe_TNR" : 10.**4
 }
 
-#   Förster energy transfer radius for ACRSA -> TBPe [nm].
+#   Energy transfer radius for ACRSA -> TBPe [nm] :
 #   FRET : Forster Resonnance Energy Transfer, DET : Dexter Energy Transfer.
 TRANSFER_RADIUS : dict[str, float] = {
     "FRET" : 5.55,
-    "DET" : 0.3,
+    "DET" : 0.3
+}
+
+#   Bond energy of excitons [eV]
+BOND_ENERGY : dict[str, float] = {
+    "singlet" : 0.3,
+    "triplet" : 0.5
 }
 
 
@@ -122,7 +129,7 @@ class Molecule :
             else :
                 self.exciton = EXCITON["triplet"]
 
-    def unbound_exciton(self) -> None :
+    def unbind_exciton(self) -> None :
         if self.exciton :
             self.exciton = EXCITON["none"]
 
