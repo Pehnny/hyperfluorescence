@@ -169,7 +169,6 @@ class Lattice :
         n_tadf : int = round(grid_size * self._proportions.tadf)
         n_fluo : int = round(grid_size * self._proportions.fluo)
         n_host : int = grid_size - host_layers * x_max * y_max - n_tadf - n_fluo
-        print(n_host, n_tadf, n_fluo)
         assert n_host+n_tadf+n_fluo+host_layers*x_max*y_max == grid_size, f"Expected {grid_size} molecules, got {n_fluo+n_host+n_tadf}."
         sub_z_max : int = z_max - host_layers
         sub_grid : list[int] = [0 for i in range(n_host)] + [1 for i in range(n_tadf)] + [2 for i in range(n_fluo)]
@@ -498,7 +497,7 @@ class Lattice :
             Event(molecule.position, neighbour, self._time_move_electron(molecule.position, neighbour), EVENTS["move"], PARTICULES["electron"])
             for molecule in molecules
             for neighbour in molecule.neighbourhood
-            if neighbour not in self._electrons_locations
+            if neighbour not in self._electrons_locations + self._excitons_locations
         ]
         molecules = (
             self._get_molecule(position)
@@ -508,7 +507,7 @@ class Lattice :
             Event(molecule.position, neighbour, self._time_move_hole(molecule.position, neighbour), EVENTS["move"], PARTICULES["hole"])
             for molecule in molecules
             for neighbour in molecule.neighbourhood
-            if neighbour not in self._holes_locations
+            if neighbour not in self._holes_locations + self._excitons_locations
         ])
         if len(events) > 0 :
             event : Event = min(events)
@@ -783,9 +782,10 @@ class Lattice :
         for event in self._capture_events :
             event.tau -= time
 
-    def operations(self, stop : int = 10**7) -> None :
+    def operations(self, duration : float = 10.**(-2), stop : int = 10**7) -> None :
         init_step : int = self._step
-        while self._removed_electron < self._charges and self._removed_hole < self._charges :
+        init_time : float = self._time
+        while self._time < init_time + duration :
             self._step += 1
             time = self._time
             #   Exécute l'évenement suivant.
@@ -793,29 +793,27 @@ class Lattice :
                 running = self._first_reaction_method()
             except :
                 traceback.print_exc()
-                print("\n", self._cache, "\n")
-                print("electrons : ", len(self._electrons_locations), self._electrons_locations, "\n")
-                print("holes : ", len(self._holes_locations), self._holes_locations, "\n")
-                print("excitons : ", len(self._excitons_locations), self._excitons_locations, "\n")
-                print("move events : ", len(self._move_events), self._move_events, "\n")
-                print("exciton events : ", len(self._exciton_events), self._exciton_events, "\n")
-                print("fluorophores : ", len(self._fluorophores_locations), self._fluorophores_locations, "\n")
+                self.get_info()
                 return
             if not running :
                 self._update_IQE()
                 print("No more events left.\n", "Stopping process...")
-                print(self._cache)
+                self.get_info()
                 return
             if time > self._time :
                 print("Negative time encountered.\n", "Stopping process...")
-                print(self._cache)
+                self.get_info()
+                return
+            if self._removed_electron == self._charges or self._removed_hole == self._charges :
+                self._update_IQE()
+                print("All charges used.\n", "Stopping process...")
                 return
             if self._step >= init_step + stop :
-                # self._update_IQE()
-                # print("Occurrence limit reached.\n", "Stopping process...")
+                self._update_IQE()
+                print("Occurrence limit reached.\n", "Stopping process...")
                 return
         self._update_IQE()
-        print("Recquired amount of recombinations reached.\n", "Stopping process...") 
+        print("All charges used.\n", "Stopping process...") 
         
     def _update_IQE(self) -> None :
         self._IQE = 100. * 2. * self._emission / (self._injected_electrons + self._injected_holes)
@@ -834,6 +832,16 @@ class Lattice :
     def _get_all_events(self) -> list[Event] :
         output : list[Event] = self._move_events + self._exciton_events + self._capture_events
         return output
+    
+    def get_info(self) -> None :
+        print("\n", self._cache, "\n")
+        print("electrons : ", len(self._electrons_locations), self._electrons_locations, "\n")
+        print("holes : ", len(self._holes_locations), self._holes_locations, "\n")
+        print("excitons : ", len(self._excitons_locations), self._excitons_locations, "\n")
+        print("move events : ", len(self._move_events), self._move_events, "\n")
+        print("exciton events : ", len(self._exciton_events), self._exciton_events, "\n")
+        print("capture events : ", len(self._capture_events), self._capture_events, "\n")
+        print("fluorophores : ", len(self._fluorophores_locations), self._fluorophores_locations, "\n")
     
     def get_IQE(self) -> float :
         return self._IQE
@@ -861,6 +869,6 @@ if __name__ == "__main__" :
     for i in range(op) :
         el, ho, ex = test.get_particules_positions()
         plot(el, ho, ex, *dim, savepath.joinpath(f"{i}.png"))
-        test.operations(100, 1)
+        test.operations(1)
     el, ho, ex = test.get_particules_positions()
     plot(el, ho, ex, *dim, savepath.joinpath(f"{i}.png"))
