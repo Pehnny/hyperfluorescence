@@ -6,18 +6,18 @@
 module load releases/2022a
 module load Python/3.10.4-GCCcore-11.3.0
 
-name="CMAES"
+name="CMAHF"
 job_type=$1
 
 declare -i supervisor_id=$2
-declare -i nmax=101
+declare -i nmax=51
 declare -i npop=50
 
 supervisor_time="00:10:00"
 declare -i supervisor_mem=2048
 
 worker_time="12:00:00"
-declare -i worker_mem=2048
+declare -i worker_mem=4096
 
 function supervisor {
     echo "I'm the supervisor #${supervisor_id} !"

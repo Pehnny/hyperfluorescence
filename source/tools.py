@@ -13,3 +13,13 @@ class Shuffle :
             self.length -= 1
             return pick
         raise IndexError("No more item in array !")
+
+def min_0(values : list) :
+    zeros = values.count(0)
+    if zeros == 0 :
+        return min(values)
+    elif zeros < len(values) :
+        subvalues = [value for value in values if value != 0]
+        return min(subvalues)
+    else :
+        raise ValueError("Arg values contains only zeros !")

@@ -37,8 +37,7 @@ def cwd() -> Path :
 
 def IQE(proportions : tuple) -> float :
     oled = Lattice(proportions)
-    recombinations : int = 10**1
-    oled.operations(recombinations)
+    oled.operations()
     return 100. - oled.get_IQE()
 
 

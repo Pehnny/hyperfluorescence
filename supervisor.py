@@ -25,7 +25,7 @@ FILES = {
 def supervisor(id_number : int) -> None :
     print(f"Supervisor with ID = {id_number}")
 
-    # Generates useful paths and gets parameters
+    #   Generates useful paths and gets parameters
     home : Path = cwd()
     source : Path = home.joinpath("source")
     sources : list[Path] = [source.joinpath(file) for file in source.iterdir() if file.suffix == ".py"]
@@ -33,37 +33,41 @@ def supervisor(id_number : int) -> None :
         parameters : dict = json.load(file)
     workers : list[Path] = [home.joinpath(f"worker_{i+1}") for i in range(parameters["population"])]
     solver_file : Path = home.joinpath(FILES["solver"])
-    history : Path = home.joinpath(FILES["history"])
+    global_history : Path = home.joinpath(FILES["history"])
 
-    # Deals with the first supervisor
+    #   Deals with the first supervisor
     if id_number == 1 :
-        # Creates solver
+        #   Creates solver
         solver : CMAES = CMAES(parameters["initial"], parameters["sigma"], parameters["options"])
         population : list = solver.ask(parameters["population"])
-        # Copies files from source to worker_id and create input files (first generation)
+        #   Copies files from source to worker_id and create input files (first generation)
         for n, worker in enumerate(workers) :
             worker.mkdir(exist_ok = True)
             for file in sources :
                 copy(file, worker)
-            input : Path = worker.joinpath(FILES["in"])
-            with open(input, "w") as file :
+            input_file : Path = worker.joinpath(FILES["in"])
+            with open(input_file, "w") as file :
                 json.dump(list(population[n]), file)
-        # Save solver state
+        #   Save solver state
         with open(solver_file, "wb") as file :
             file.write(solver.pickle_dumps())
-        # Creates history
-        result : dict = dict()
-        with open(history, "w") as file :
-            json.dump(result, file)
+        #   Creates history
+        with open(global_history, "w") as file :
+            json.dump(dict(), file)
+        for worker in workers :
+            local_history : Path = worker.joinpath(FILES["history"])
+            with open(local_history, "w") as file :
+                json.dump(dict(), file)
         print(f"Supervisor {id_number} did its job.") 
-    # Deals with next supervisors
+
+    #   Deals with next supervisors
     elif 2 <= id_number <= parameters["generation"] :
-        # Gets the inputs and outputs from the previous generation
+        #   Gets the inputs and outputs from the previous generation
         previous_population : list = []
         fitness : list = []
         for n, worker in enumerate(workers) :
-            input : Path = worker.joinpath(FILES["in"])
-            with open(input) as file :
+            input_file : Path = worker.joinpath(FILES["in"])
+            with open(input_file) as file :
                 previous_population.append(json.load(file))
             output : Path = worker.joinpath(FILES["out"])
             try :
@@ -74,43 +78,47 @@ def supervisor(id_number : int) -> None :
                 with open(home.joinpath("errors.txt"), "w") as file :
                     file.write(f"Supervisor {id_number} didn't find the output of worker {n}")
                 return
-        # Loads and updates solver
+        #   Loads and updates solver
         with open(solver_file, "rb") as file :
             solver : CMAES = pickle.load(file)
         solver.tell(previous_population, fitness)
-        # Clears workers output
-        for worker in workers :
-            worker.joinpath(FILES["out"]).unlink()
-        # Saves history
+        #   Saves history
         update : dict = {f"gen_{id_number-1}" : convert(solver.result._asdict())}
-        with open(history) as file :
+        with open(global_history) as file :
             result = json.load(file)
         result |= update
-        with open(history, "w") as file :
+        with open(global_history, "w") as file :
             json.dump(result, file, sort_keys = True, indent = 4)
-        # Generates a new generation
+        for worker, individual in zip(workers, previous_population) :
+            population_dict = {
+                f"{id_number-1}" : individual
+            }
+            local_history : Path = worker.joinpath(FILES["history"])
+            with open(local_history) as file :
+                tmp = json.load(file)
+            tmp |= population_dict
+            with open(local_history, "w") as file :
+                json.dump(tmp, file, sort_keys = True, indent = 4)
+        #   Generates a new generation
         if solver.stop() :
             home.joinpath("STOP").touch()
             print(f"Solver excited early. {solver.stop()}")
             return
-        population : list = solver.ask(parameters["population"])
-        for n, worker in enumerate(workers) :
-            input : Path = worker.joinpath(FILES["in"])
-            with open(input, "w") as file :
-                json.dump(list(population[n]), file)
-        # Saves solver
+        population = solver.ask(parameters["population"])
+        #   Saves solver
         with open(solver_file, "wb") as file :
             file.write(solver.pickle_dumps())
         print(f"Supervisor {id_number} did its job.")
-    # Deals with the last supervisor
+
+    #   Deals with the last supervisor
     elif id_number > parameters["generation"] :
         home.joinpath("STOP").touch()
-        # Gets the inputs and outputs from the last generation
+        #   Gets the inputs and outputs from the last generation
         previous_population : list = []
         fitness : list = []
         for n, worker in enumerate(workers) :
-            input : Path = worker.joinpath(FILES["in"])
-            with open(input) as file :
+            input_file : Path = worker.joinpath(FILES["in"])
+            with open(input_file) as file :
                 previous_population.append(json.load(file))
             output : Path = worker.joinpath(FILES["out"])
             try :
@@ -121,24 +129,33 @@ def supervisor(id_number : int) -> None :
                 with open(home.joinpath("errors.txt"), "w") as file :
                     file.write(f"Supervisor {id_number} didn't find the output of worker {n}")
                 return
-        # Loads and updates solver
+        #   Loads and updates solver
         with open(solver_file, "rb") as file :
             solver : CMAES = pickle.load(file)
         solver.tell(previous_population, fitness)
-        # Saves history
-        # Saves history
+        #   Saves history
         update : dict = {f"gen_{id_number-1}" : convert(solver.result._asdict())}
-        with open(history) as file :
+        with open(global_history) as file :
             result = json.load(file)
         result |= update
-        with open(history, "w") as file :
+        with open(global_history, "w") as file :
             json.dump(result, file, sort_keys = True, indent = 4)
-        # Cleans workers
+        for worker, individual in zip(workers, previous_population) :
+            population_dict = {
+                f"{id_number-1}" : individual
+            }
+            local_history : Path = worker.joinpath(FILES["history"])
+            with open(local_history) as file :
+                tmp = json.load(file)
+            tmp |= population_dict
+            with open(local_history, "w") as file :
+                json.dump(tmp, file, sort_keys = True, indent = 4)
+        #   Cleans workers
         for worker in workers :
             clean_worker(worker)
-        # Stops CMAES
+        #   Stops CMAES
         print(f"Supervisor {id_number} finished the job.")
-        print(f"All workers were cleared. Results should be stored in {history}")
+        print(f"All workers were cleared. Results should be stored in {global_history}")
     else :
         print(f"Unvalid supervisor ID encountered.")
         home.joinpath("STOP").touch()

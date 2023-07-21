@@ -41,8 +41,14 @@ def cwd() -> Path :
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("job", action = "store", type = str, nargs = "?")
-    parser.add_argument("id", action = "store", type = int, nargs = "?")
+    try :
+        parser.add_argument("job", action = "store", type = str, nargs = "?")
+        parser.add_argument("id", action = "store", type = int, nargs = "?")
+    except :
+        home = cwd()
+        home.joinpath("STOP").touch()
+        print("Failed to read supervisor or worker inputs")
+        exit()
     args = parser.parse_args()
     job_type, id = args.job, args.id
     exit_code = main(job_type, id)
@@ -50,5 +56,4 @@ if __name__ == "__main__":
 else :
     home = cwd()
     home.joinpath("STOP").touch()
-    with open(home.joinpath("errors.txt"), "w") as file :
-        file.write(f"Expected __name__ to be __main__, got {__name__}")
+    print(f"Expected __name__ to be __main__, got {__name__}")

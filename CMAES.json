@@ -3,7 +3,7 @@
     "population" : 50,
     "sigma" : 0.01,
     "initial" : [
-        0.15, 0.01
+        0.15, 0.0275
     ],
     "options" : {
         "bounds" : [
