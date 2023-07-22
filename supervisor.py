@@ -78,6 +78,16 @@ def supervisor(id_number : int) -> None :
                 with open(home.joinpath("errors.txt"), "w") as file :
                     file.write(f"Supervisor {id_number} didn't find the output of worker {n}")
                 return
+            #   Saves local history
+            local_history : Path = worker.joinpath(FILES["history"])
+            population_dict = {
+                f"gen_{id_number-1}" : [*previous_population[-1], fitness[-1]] 
+            }
+            with open(local_history) as file :
+                tmp = json.load(file)
+            tmp |= population_dict
+            with open(local_history, "w") as file :
+                json.dump(tmp, file, sort_keys = True, indent = 4)
         #   Loads and updates solver
         with open(solver_file, "rb") as file :
             solver : CMAES = pickle.load(file)
@@ -89,23 +99,17 @@ def supervisor(id_number : int) -> None :
         result |= update
         with open(global_history, "w") as file :
             json.dump(result, file, sort_keys = True, indent = 4)
-        for worker, individual in zip(workers, previous_population) :
-            population_dict = {
-                f"{id_number-1}" : individual
-            }
-            local_history : Path = worker.joinpath(FILES["history"])
-            with open(local_history) as file :
-                tmp = json.load(file)
-            tmp |= population_dict
-            with open(local_history, "w") as file :
-                json.dump(tmp, file, sort_keys = True, indent = 4)
         #   Generates a new generation
         if solver.stop() :
             home.joinpath("STOP").touch()
             print(f"Solver excited early. {solver.stop()}")
             return
         population = solver.ask(parameters["population"])
-        #   Saves solver
+        for worker, individual in zip(workers, population) :
+            input_file : Path = worker.joinpath(FILES["in"])
+            with open(input_file, "w") as file :
+                json.dump(list(individual), file)
+        #   Saves global solver
         with open(solver_file, "wb") as file :
             file.write(solver.pickle_dumps())
         print(f"Supervisor {id_number} did its job.")
@@ -129,33 +133,32 @@ def supervisor(id_number : int) -> None :
                 with open(home.joinpath("errors.txt"), "w") as file :
                     file.write(f"Supervisor {id_number} didn't find the output of worker {n}")
                 return
+            local_history : Path = worker.joinpath(FILES["history"])
+            population_dict = {
+                f"gen_{id_number-1}" : [*previous_population[-1], fitness[-1]] 
+            }
+            with open(local_history) as file :
+                tmp = json.load(file)
+            tmp |= population_dict
+            with open(local_history, "w") as file :
+                json.dump(tmp, file, sort_keys = True, indent = 4)
         #   Loads and updates solver
         with open(solver_file, "rb") as file :
             solver : CMAES = pickle.load(file)
         solver.tell(previous_population, fitness)
-        #   Saves history
+        #   Saves global history
         update : dict = {f"gen_{id_number-1}" : convert(solver.result._asdict())}
         with open(global_history) as file :
             result = json.load(file)
         result |= update
         with open(global_history, "w") as file :
             json.dump(result, file, sort_keys = True, indent = 4)
-        for worker, individual in zip(workers, previous_population) :
-            population_dict = {
-                f"{id_number-1}" : individual
-            }
-            local_history : Path = worker.joinpath(FILES["history"])
-            with open(local_history) as file :
-                tmp = json.load(file)
-            tmp |= population_dict
-            with open(local_history, "w") as file :
-                json.dump(tmp, file, sort_keys = True, indent = 4)
         #   Cleans workers
-        for worker in workers :
-            clean_worker(worker)
+        # for worker in workers :
+        #     clean_worker(worker)
         #   Stops CMAES
         print(f"Supervisor {id_number} finished the job.")
-        print(f"All workers were cleared. Results should be stored in {global_history}")
+        # print(f"All workers were cleared. Results should be stored in {global_history}")
     else :
         print(f"Unvalid supervisor ID encountered.")
         home.joinpath("STOP").touch()

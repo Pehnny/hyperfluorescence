@@ -2,7 +2,7 @@ job_type=$1                         # s=supervisor / w=worker
 
 declare -i ID=$2                    # supervisor / worker ID
 
-name="CMA"                        # nom generique pour les jobs a soumettre
+name="CMAHF"                        # nom generique pour les jobs a soumettre
 
 supervisor_time="00:10:00"
 declare -i supervisor_mem=2048
