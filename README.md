@@ -3,4 +3,4 @@ Master Thesis at UNamur. Kinetic Monte-Carlo based simulation of hyperfluorescen
 
 *wip...*
 
-*Redaction planned for september 2023*
+*Redaction postponed*
